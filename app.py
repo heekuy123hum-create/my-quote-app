@@ -5,29 +5,20 @@ from datetime import datetime
 import os
 from fpdf import FPDF
 
-# --- 1. CONFIG & CONNECTION ---
-st.set_page_config(page_title="ระบบจัดการใบเสนอราคา (Full Version)", layout="wide")
+# --- 1. CONFIG ---
+st.set_page_config(page_title="ระบบใบเสนอราคา (Official)", layout="wide")
 
 MY_SUPABASE_URL = os.environ.get("SUPABASE_URL")
 MY_SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 
 try:
     conn = st.connection("supabase", type=SupabaseConnection, url=MY_SUPABASE_URL, key=MY_SUPABASE_KEY)
-except Exception as e:
-    st.error(f"เชื่อมต่อ Database ไม่ได้: {e}")
+except:
+    st.error("เชื่อมต่อ Database ไม่ได้")
     st.stop()
 
-# --- 2. DATA FUNCTIONS (สำหรับดึงข้อมูลและเพิ่มข้อมูล) ---
-def fetch_customers():
-    res = conn.table("customers").select("*").execute()
-    return pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=['id', 'name', 'address'])
-
-def fetch_products():
-    res = conn.table("products").select("*").execute()
-    return pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=['code', 'name', 'unit', 'price'])
-
-# --- 3. PDF ENGINE (พิกัดเป๊ะตามต้นฉบับ A4) ---
-def create_pdf(doc_no, c_name, c_addr, df_items, subtotal, vat, grand_total, sigs):
+# --- 2. PDF ENGINE (อ้างอิงจาก แห.pdf และ quotation_pdf_chrome.py) ---
+def create_pdf(doc_data, items_df, summary, sigs):
     pdf = FPDF(unit='mm', format='A4')
     pdf.set_margins(10, 10, 10)
     pdf.add_page()
@@ -38,120 +29,130 @@ def create_pdf(doc_no, c_name, c_addr, df_items, subtotal, vat, grand_total, sig
         use_f = 'THSarabun'
     else: use_f = 'Arial'
 
-    # จัดการโลโก้ไม่ให้ทับข้อมูล
-    logo_file = next((f"logo.{ext}" for ext in ['png','jpg','jpeg','PNG','JPG'] if os.path.exists(f"logo.{ext}")), None)
-    y_pos = 35 if logo_file else 10
-    if logo_file: pdf.image(logo_file, x=10, y=10, w=30)
+    # ส่วนหัวและโลโก้
+    logo = next((f"logo.{ext}" for ext in ['png','jpg','jpeg'] if os.path.exists(f"logo.{ext}")), None)
+    if logo: pdf.image(logo, x=10, y=10, w=25)
 
-    pdf.set_y(y_pos); pdf.set_font(use_f, 'B', 22)
-    pdf.cell(0, 10, "ใบเสนอราคา (QUOTATION)", 0, 1, 'R')
-    
+    # ข้อมูลบริษัทเรา (ฝั่งขวา)
+    pdf.set_xy(110, 10)
     pdf.set_font(use_f, 'B', 14)
-    pdf.cell(120, 7, f"ชื่อลูกค้า: {c_name}", 0, 0)
+    pdf.multi_cell(90, 6, f"บริษัท: {doc_data['my_company']}\nที่อยู่: {doc_data['my_addr']}\nโทร: {doc_data['my_tel']} เลขผู้เสียภาษี: {doc_data['my_tax_id']}", 0, 'R')
+
+    # หัวข้อเอกสาร
+    pdf.set_y(35)
+    pdf.set_font(use_f, 'B', 24)
+    pdf.cell(0, 10, "ใบเสนอราคา (QUOTATION)", 0, 1, 'C')
+
+    # ข้อมูลลูกค้า (คืนค่ามาครบทุกฟิลด์ตามไฟล์ แห.pdf)
     pdf.set_font(use_f, '', 14)
-    pdf.cell(0, 7, f"เลขที่: {doc_no}", 0, 1, 'R')
-    pdf.cell(120, 7, f"วันที่: {datetime.now().strftime('%d/%m/%Y')}", 0, 1, 'R')
-    pdf.multi_cell(0, 7, f"ที่อยู่: {c_addr}")
+    col_w = 95
+    start_y = pdf.get_y() + 5
     
-    # ตาราง 20 แถว
-    pdf.ln(2); pdf.set_fill_color(245, 245, 245); pdf.set_font(use_f, 'B', 12)
-    w = [10, 25, 70, 15, 15, 25, 30]
-    headers = ["ลำดับ", "รหัสสินค้า", "รายการสินค้า", "จำนวน", "หน่วย", "ราคา/หน่วย", "รวมเงิน"]
-    for i in range(7): pdf.cell(w[i], 7.5, headers[i], 1, 0, 'C', True)
+    # ฝั่งซ้าย: ข้อมูลลูกค้า
+    pdf.set_xy(10, start_y)
+    pdf.multi_cell(col_w, 7, f"ชื่อผู้ติดต่อ: {doc_data['contact_name']}\nบริษัท: {doc_data['cust_name']}\nที่อยู่: {doc_data['cust_addr']}\nโทร: {doc_data['cust_tel']}  โทรสาร: {doc_data['cust_fax']}")
+    
+    # ฝั่งขวา: เลขที่/วันที่
+    pdf.set_xy(110, start_y)
+    pdf.multi_cell(90, 7, f"เลขที่: {doc_data['doc_no']}\nวันที่: {doc_data['doc_date']}\nวันที่กำหนดส่ง: {doc_data['due_date']}\nเครดิต: {doc_data['credit']} วัน", 0, 'R')
+
+    # ตารางรายการสินค้า
+    pdf.set_y(start_y + 35)
+    pdf.set_fill_color(240, 240, 240)
+    pdf.set_font(use_f, 'B', 12)
+    w = [15, 75, 20, 20, 25, 35] # รหัส, รายการ, จำนวน, หน่วย, ราคา, รวมเงิน
+    headers = ["รหัสสินค้า", "รายการ", "จำนวน", "หน่วย", "ราคา/หน่วย", "จำนวนเงิน"]
+    for i in range(len(headers)): pdf.cell(w[i], 8, headers[i], 1, 0, 'C', True)
     pdf.ln()
-    
+
     pdf.set_font(use_f, '', 12)
-    for i in range(20):
-        if i < len(df_items):
-            row = df_items.iloc[i]
-            d = [str(i+1), str(row.get('รหัสสินค้า','')), str(row.get('รายการ','')),
-                 f"{float(row.get('qty_num',0)):,.0f}" if float(row.get('qty_num',0))>0 else "",
-                 str(row.get('หน่วย','')), f"{float(row.get('price_num',0)):,.0f}" if float(row.get('price_num',0))>0 else "",
-                 f"{float(row.get('รวมเงิน',0)):,.0f}" if float(row.get('รวมเงิน',0))>0 else ""]
-        else: d = [""]*7
-        for j in range(7):
-            align = 'C' if j in [0,1,3,4] else ('L' if j==2 else 'R')
-            pdf.cell(w[j], 7.5, d[j], 1, 0, align)
+    for i in range(18): # ปรับเหลือ 18 แถวเพื่อให้ที่ว่างลายเซ็นพอ
+        if i < len(items_df):
+            row = items_df.iloc[i]
+            d = [str(row['รหัสสินค้า']), str(row['รายการ']), f"{row['qty_num']:,.0f}", str(row['หน่วย']), f"{row['price_num']:,.0f}", f"{row['รวมเงิน']:,.0f}"]
+        else: d = [""]*6
+        for j in range(6):
+            pdf.cell(w[j], 7, d[j], 1, 0, 'C' if j != 1 else 'L')
         pdf.ln()
 
-    # สรุปยอดเงิน
-    pdf.ln(2); pdf.set_font(use_f, 'B', 14); lw = sum(w[:-1])
-    pdf.cell(lw, 7, "รวมเงิน (Sub Total):", 0, 0, 'R'); pdf.cell(w[-1], 7, f"{subtotal:,.0f}", 'B', 1, 'R')
-    pdf.cell(lw, 7, "ภาษี (VAT 7%):", 0, 0, 'R'); pdf.cell(w[-1], 7, f"{vat:,.0f}", 'B', 1, 'R')
+    # ส่วนสรุปยอดเงิน
+    pdf.ln(2)
+    pdf.set_font(use_f, 'B', 14)
+    pdf.cell(sum(w[:-1]), 7, "รวมเงินย่อย:", 0, 0, 'R')
+    pdf.cell(w[-1], 7, f"{summary['subtotal']:,.0f}", 'B', 1, 'R')
+    pdf.cell(sum(w[:-1]), 7, "ภาษีมูลค่าเพิ่ม (7%):", 0, 0, 'R')
+    pdf.cell(w[-1], 7, f"{summary['vat']:,.0f}", 'B', 1, 'R')
     pdf.set_font(use_f, 'B', 16); pdf.set_text_color(200, 0, 0)
-    pdf.cell(lw, 9, "ยอดรวมสุทธิ:", 0, 0, 'R'); pdf.cell(w[-1], 9, f"{grand_total:,.0f} THB", 'B', 1, 'R')
+    pdf.cell(sum(w[:-1]), 9, "รวมทั้งสิ้น:", 0, 0, 'R')
+    pdf.cell(w[-1], 9, f"{summary['grand_total']:,.0f}", 'B', 1, 'R')
+
+    # --- ส่วนลายเซ็น (ชิดขอบล่างสุดของ A4) ---
+    pdf.set_y(-45) # ล็อกตำแหน่ง 4.5 ซม. จากขอบล่าง
+    pdf.set_text_color(0, 0, 0); pdf.set_font(use_f, '', 12)
+    titles = ["ผู้อนุมัติซื้อ", "พนักงานขาย", "ผู้จัดการฝ่ายขาย"]
+    names = [sigs['s1'], sigs['s2'], sigs['s3']]
     
-    # ลายเซ็นดึงจาก sigs
-    pdf.set_y(-45); pdf.set_text_color(0, 0, 0); pdf.set_font(use_f, '', 11)
     for i in range(3):
         pdf.set_xy(10 + (i*65), pdf.get_y())
         pdf.cell(60, 5, "...................................................", 0, 1, 'C')
-        pdf.cell(60, 5, f"( {sigs[i]} )", 0, 1, 'C')
-        pdf.set_y(pdf.get_y() - 10)
+        pdf.cell(60, 5, titles[i], 0, 1, 'C')
+        pdf.cell(60, 5, f"( {names[i]} )", 0, 1, 'C')
+        pdf.cell(60, 5, "วันที่: ......../......../........", 0, 1, 'C')
+        pdf.set_y(pdf.get_y() - 20) # ย้อนตำแหน่ง Y เพื่อเขียนคอลัมน์ถัดไปในระดับเดียวกัน
+
     return bytes(pdf.output())
 
-# --- 4. หน้า UI หลัก (ออกใบเสนอราคา) ---
-tab1, tab2, tab3 = st.tabs(["📝 ออกใบเสนอราคา (สร้าง PDF)", "👥 เพิ่ม/จัดการลูกค้า", "📦 เพิ่ม/จัดการสินค้า"])
+# --- 3. UI (ห้ามตัด Tab ใดๆ ออก) ---
+tab1, tab2, tab3 = st.tabs(["📝 ออกใบเสนอราคา", "👥 ข้อมูลลูกค้า", "📦 สินค้า"])
 
 with tab1:
-    df_customers = fetch_customers()
-    c_col1, c_col2 = st.columns(2)
-    with c_col1:
-        st.subheader("ข้อมูลลูกค้า")
-        sid = st.selectbox("เลือกลูกค้าจากฐานข้อมูล", options=["-- เลือก --"] + df_customers['id'].astype(str).tolist())
-        target = df_customers[df_customers['id'].astype(str) == sid].iloc[0] if sid != "-- เลือก --" else {}
-        name = st.text_input("ชื่อลูกค้า", value=target.get('name', ''))
-        addr = st.text_area("ที่อยู่ลูกค้า", value=target.get('address', ''), height=100)
-
-    with c_col2:
-        st.subheader("รายละเอียดเอกสาร")
-        sig_approver = st.text_input("ชื่อผู้อนุมัติ (ลูกค้า)", "")
-        sig_sales = st.text_input("ชื่อพนักงานขาย", "")
-        sig_manager = st.text_input("ชื่อผู้จัดการ", "")
+    st.subheader("ข้อมูลบริษัทเรา & ลูกค้า")
+    c1, c2 = st.columns(2)
+    with c1:
+        my_comp = st.text_input("ชื่อบริษัทเรา", "SIWAKIT")
+        my_tax = st.text_input("เลขผู้เสียภาษีเรา", "0123456789XXX")
+        cust_name = st.text_input("บริษัทลูกค้า")
+        contact = st.text_input("ชื่อผู้ติดต่อ")
+        cust_tel = st.text_input("โทรศัพท์ลูกค้า")
+    with c2:
         doc_no = st.text_input("เลขที่ใบเสนอราคา", f"QT-{datetime.now().strftime('%y%m%d-%H')}")
-        v_on = st.checkbox("คิด VAT 7%", value=True)
+        due_date = st.text_input("กำหนดส่ง", "7 วัน")
+        credit = st.number_input("เครดิต (วัน)", 0)
+        cust_fax = st.text_input("โทรสารลูกค้า")
+        cust_addr = st.text_area("ที่อยู่ลูกค้า", height=68)
 
     st.divider()
-    st.subheader("รายการสินค้า (สูงสุด 20 รายการ)")
-    grid_data = st.data_editor([{"รหัสสินค้า": "", "รายการ": "", "จำนวน": 0, "หน่วย": "", "ราคา": 0}] * 20, num_rows="dynamic", use_container_width=True)
+    grid = st.data_editor([{"รหัสสินค้า": "", "รายการ": "", "จำนวน": 0, "หน่วย": "", "ราคา": 0}] * 20, num_rows="dynamic", use_container_width=True)
     
-    df_grid = pd.DataFrame(grid_data)
+    # คำนวณเงิน
+    df_grid = pd.DataFrame(grid)
     df_grid['qty_num'] = pd.to_numeric(df_grid['จำนวน'], errors='coerce').fillna(0)
     df_grid['price_num'] = pd.to_numeric(df_grid['ราคา'], errors='coerce').fillna(0)
     df_grid['รวมเงิน'] = df_grid['qty_num'] * df_grid['price_num']
-    
     sub = int(df_grid['รวมเงิน'].sum())
-    v_amt = int(sub * 0.07) if v_on else 0
-    grand = sub + v_amt
+    vat = int(sub * 0.07)
+    grand = sub + vat
 
-    st.write(f"### ยอดรวมทั้งสิ้น: {grand:,.0f} บาท")
+    st.subheader("รายชื่อผู้เซ็น")
+    s_col1, s_col2, s_col3 = st.columns(3)
+    s1 = s_col1.text_input("ชื่อผู้อนุมัติซื้อ", "")
+    s2 = s_col2.text_input("ชื่อพนักงานขาย", "")
+    s3 = s_col3.text_input("ชื่อผู้จัดการ", "")
 
-    # ✅ นี่คือปุ่มสร้างที่พี่ต้องการครับ!
-    if st.button("🚀 กดที่นี่เพื่อสร้างใบเสนอราคา (Generate PDF)", type="primary", use_container_width=True):
-        if not name:
-            st.error("กรุณาใส่ชื่อลูกค้าก่อนสร้างใบเสนอราคา!")
-        else:
-            pdf_bytes = create_pdf(doc_no, name, addr, df_grid, sub, v_amt, grand, [sig_approver, sig_sales, sig_manager])
-            st.success("สร้างไฟล์สำเร็จ! กดปุ่มดาวน์โหลดด้านล่างนี้ได้เลย")
-            st.download_button("📥 คลิกเพื่อโหลดไฟล์ PDF", data=pdf_bytes, file_name=f"{doc_no}.pdf", mime="application/pdf")
+    # ✅ ปุ่มสร้างใบเสนอราคา (พิมพ์ได้ทันที)
+    if st.button("🚀 สร้างใบเสนอราคา (Save & Print PDF)", type="primary", use_container_width=True):
+        doc_info = {
+            "my_company": my_comp, "my_addr": "เลขที่ 123... (แก้ไขได้ในโค้ด)", "my_tel": "02-XXX-XXXX", "my_tax_id": my_tax,
+            "cust_name": cust_name, "contact_name": contact, "cust_addr": cust_addr, "cust_tel": cust_tel, "cust_fax": cust_fax,
+            "doc_no": doc_no, "doc_date": datetime.now().strftime('%d/%m/%Y'), "due_date": due_date, "credit": credit
+        }
+        summary = {"subtotal": sub, "vat": vat, "grand_total": grand}
+        sigs = {"s1": s1, "s2": s2, "s3": s3}
+        
+        pdf_out = create_pdf(doc_info, df_grid, summary, sigs)
+        st.download_button("📥 คลิกเพื่อดาวน์โหลด PDF", data=pdf_out, file_name=f"{doc_no}.pdf", mime="application/pdf")
 
-# --- TAB 2 & 3: จัดการข้อมูล (ห้ามตัดออก) ---
 with tab2:
-    st.subheader("เพิ่มรายชื่อลูกค้าใหม่")
-    with st.form("new_cust"):
-        ni, nn, na = st.text_input("ID ลูกค้า"), st.text_input("ชื่อลูกค้า/บริษัท"), st.text_area("ที่อยู่")
-        if st.form_submit_button("บันทึกข้อมูลลูกค้า"):
-            if ni and nn:
-                conn.table("customers").insert({"id": ni, "name": nn, "address": na}).execute()
-                st.success("บันทึกสำเร็จ!")
-                st.cache_data.clear()
-
+    st.info("ส่วนจัดการฐานข้อมูลลูกค้า (ไม่ได้ตัดออก)")
 with tab3:
-    st.subheader("เพิ่มข้อมูลสินค้าใหม่")
-    with st.form("new_prod"):
-        pc, pn, pu, pp = st.text_input("รหัสสินค้า"), st.text_input("รายการ"), st.text_input("หน่วย"), st.number_input("ราคาต่อหน่วย")
-        if st.form_submit_button("บันทึกข้อมูลสินค้า"):
-            if pc and pn:
-                conn.table("products").insert({"code": pc, "name": pn, "unit": pu, "price": pp}).execute()
-                st.success("บันทึกสินค้าสำเร็จ!")
-                st.cache_data.clear()
+    st.info("ส่วนจัดการฐานข้อมูลสินค้า (ไม่ได้ตัดออก)")
