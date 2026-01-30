@@ -95,8 +95,9 @@ def create_pdf(d, items_df, summary, sigs, remark_text):
         pdf.cell(w[i], 8, headers[i], 1, 0, 'C', True)
     pdf.ln()
 
-    # ตารางสินค้า (คงที่ 20 บรรทัด เพื่อความสวยงาม)
+    # ตารางสินค้า (คงที่ 20 บรรทัด แต่ปรับความสูงลงเหลือ 6.5 เพื่อดึงพื้นที่ด้านล่างคืนมา)
     pdf.set_font(use_f, '', 11)
+    row_height = 6.5 
     for i in range(20):
         if i < len(items_df):
             row = items_df.iloc[i]
@@ -116,11 +117,12 @@ def create_pdf(d, items_df, summary, sigs, remark_text):
         for j in range(7):
             align = 'L' if j == 1 else 'C'
             if j == 6: align = 'R'
-            pdf.cell(w[j], 7, val[j], 1, 0, align)
+            pdf.cell(w[j], row_height, val[j], 1, 0, align)
         pdf.ln()
 
     # --- FOOTER & FINANCIAL SUMMARY SECTION ---
-    pdf.ln(3)
+    # ปรับลดการเว้นบรรทัดตรงนี้ (จาก 3 เหลือ 1) เพื่อดึงสรุปขึ้นไปติดตารางมากขึ้น
+    pdf.ln(1) 
     sum_y = pdf.get_y()
     
     # 1. หมายเหตุ (ฝั่งซ้าย)
@@ -135,15 +137,18 @@ def create_pdf(d, items_df, summary, sigs, remark_text):
     labels_x = 125 
     values_x = 175 # ขยับค่าตัวเลขให้ห่างจากขอบขวาพอประมาณ
     
+    # ปรับความสูงบรรทัดสรุปเหลือ 5.5 เพื่อให้กระชับขึ้นและหนีลายเซ็น
+    sum_line_h = 5.5 
+
     def add_sum_row(label, value, is_bold=False, is_red=False):
         pdf.set_font(use_f, 'B' if is_bold else '', 13 if is_bold else 12)
         if is_red: pdf.set_text_color(180, 0, 0)
         else: pdf.set_text_color(0, 0, 0)
         
         pdf.set_xy(labels_x, pdf.get_y())
-        pdf.cell(45, 6, label, 0, 0, 'R')
+        pdf.cell(45, sum_line_h, label, 0, 0, 'R')
         pdf.set_xy(values_x, pdf.get_y())
-        pdf.cell(25, 6, f"{value:,.2f}", 'B', 1, 'R')
+        pdf.cell(25, sum_line_h, f"{value:,.2f}", 'B', 1, 'R')
 
     add_sum_row("รวมเงินย่อย (Gross Total):", summary['gross'])
     add_sum_row("ส่วนลด (Total Discount):", summary['discount'])
@@ -152,6 +157,7 @@ def create_pdf(d, items_df, summary, sigs, remark_text):
     add_sum_row("ยอดรวมทั้งสิ้น (Grand Total):", summary['grand_total'], True, True)
 
     # 3. ลายเซ็น (ชิดขอบล่างกระดาษ ล็อกตำแหน่งที่ -35mm)
+    # ตรงนี้จะปลอดภัยแล้ว เพราะเราดึงส่วนสรุปขึ้นไปด้านบนด้วยการปรับความสูงตาราง
     pdf.set_y(-35)
     pdf.set_text_color(0, 0, 0)
     pdf.set_font(use_f, '', 11)
