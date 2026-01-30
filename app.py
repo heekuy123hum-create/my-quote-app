@@ -95,9 +95,9 @@ def create_pdf(d, items_df, summary, sigs, remark_text):
         pdf.cell(w[i], 8, headers[i], 1, 0, 'C', True)
     pdf.ln()
 
-    # ตารางสินค้า (ปรับ Row Height ให้เล็กลงเหลือ 6.0 เพื่อดึงพื้นที่คืนมา)
+    # ตารางสินค้า (ใช้ความสูง 6.0 ตามที่เคยปรับ เพื่อประหยัดพื้นที่)
     pdf.set_font(use_f, '', 11)
-    row_height = 6.0  # ลดจาก 6.5 -> 6.0 (20 บรรทัดจะประหยัดที่ได้ 10mm)
+    row_height = 6.0
     for i in range(20):
         if i < len(items_df):
             row = items_df.iloc[i]
@@ -121,38 +121,40 @@ def create_pdf(d, items_df, summary, sigs, remark_text):
         pdf.ln()
 
     # --- FOOTER & FINANCIAL SUMMARY SECTION ---
-    # *จุดแก้ไขสำคัญ*: ขยับจุดเริ่มสรุปขึ้นไปเกือบติดตาราง (เว้นแค่ 2mm)
-    current_y_after_table = pdf.get_y()
-    pdf.set_y(current_y_after_table + 2) 
-    
-    sum_y = pdf.get_y()
+    # *จุดแก้ไขสำคัญ*: จัดให้สองฝั่งเริ่มที่ Y เดียวกันเป๊ะๆ (Top Align)
+    pdf.ln(2) # เว้นช่องไฟนิดหน่อยหลังตาราง
+    footer_start_y = pdf.get_y() # จำตำแหน่ง Y นี้ไว้ใช้ทั้งสองฝั่ง
     
     # 1. หมายเหตุ (ฝั่งซ้าย)
-    pdf.set_xy(10, sum_y)
+    pdf.set_xy(10, footer_start_y)
     pdf.set_font(use_f, 'B', 12)
     pdf.cell(20, 6, "หมายเหตุ:", 0, 1, 'L')
     pdf.set_font(use_f, '', 12)
     pdf.set_x(10)
     pdf.multi_cell(105, 5, remark_text, 0, 'L')
     
-    # 2. ยอดเงิน (ฝั่งขวา)
+    # 2. ยอดเงิน (ฝั่งขวา) - บังคับให้เริ่ม Y ที่ footer_start_y เสมอ
     labels_x = 125 
     values_x = 175 
-    sum_line_h = 5.0 # ลดความสูงบรรทัดสรุปให้กระชับ
+    sum_line_h = 5.5 # ความสูงบรรทัดสรุป
+    
+    # สร้างตัวแปรนับตำแหน่ง Y สำหรับฝั่งขวาโดยเฉพาะ
+    curr_sum_y = footer_start_y 
 
     def add_sum_row(label, value, is_bold=False, is_red=False):
+        nonlocal curr_sum_y
         pdf.set_font(use_f, 'B' if is_bold else '', 13 if is_bold else 12)
         if is_red: pdf.set_text_color(180, 0, 0)
         else: pdf.set_text_color(0, 0, 0)
         
-        # ใช้เทคนิคจำตำแหน่ง Y เพื่อให้บรรทัดต่อกันสนิท
-        curr_y = pdf.get_y()
-        pdf.set_xy(labels_x, curr_y)
+        # กำหนดตำแหน่ง XY แบบเจาะจง ไม่สนว่าเคอร์เซอร์ฝั่งซ้ายจะไปจบตรงไหน
+        pdf.set_xy(labels_x, curr_sum_y)
         pdf.cell(45, sum_line_h, label, 0, 0, 'R')
-        pdf.set_xy(values_x, curr_y)
+        pdf.set_xy(values_x, curr_sum_y)
         pdf.cell(25, sum_line_h, f"{value:,.2f}", 'B', 1, 'R')
+        
+        curr_sum_y += sum_line_h # ขยับ Y ลงมาเอง
 
-    # เขียนแต่ละบรรทัด
     add_sum_row("รวมเงินย่อย (Gross Total):", summary['gross'])
     add_sum_row("ส่วนลด (Total Discount):", summary['discount'])
     add_sum_row("หลังหักส่วนลด (Sub Total):", summary['subtotal'])
@@ -160,7 +162,6 @@ def create_pdf(d, items_df, summary, sigs, remark_text):
     add_sum_row("ยอดรวมทั้งสิ้น (Grand Total):", summary['grand_total'], True, True)
 
     # 3. ลายเซ็น (ล็อกตำแหน่งล่างสุดเหมือนเดิม)
-    # ตอนนี้สรุปยอดจะอยู่สูงขึ้นมาก ทำให้ไม่ทับลายเซ็นแน่นอน
     pdf.set_y(-35)
     pdf.set_text_color(0, 0, 0)
     pdf.set_font(use_f, '', 11)
