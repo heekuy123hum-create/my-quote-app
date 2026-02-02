@@ -264,7 +264,7 @@ with tab1:
     with cf2:
         st.write("### สรุปยอดเงิน")
         # Checkbox VAT
-        use_vat = st.checkbox("✅ คำนวณ VAT 7%", value=True)
+        use_vat = st.checkbox("คำนวณ VAT 7%", value=True)
         
         if use_vat:
             # *** จุดแก้ไข: ตัดทศนิยมออก (int) ตามสั่ง ***
@@ -340,3 +340,4 @@ with tab3:
     )
     # Save กลับเข้า session state
     st.session_state.db_products = edited_products
+
