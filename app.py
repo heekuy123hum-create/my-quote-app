@@ -286,6 +286,12 @@ with tab1:
     # ใช้ค่าจาก Session State เป็นตัวตั้งต้น
     current_df = st.session_state.grid_df
 
+    # === [FIX: แก้ไข Error JSON NAN] ===
+    # ทำความสะอาดข้อมูล: แปลงค่าว่าง (NaN) ในคอลัมน์ตัวเลขให้เป็น 0.0 ก่อนแสดงผล
+    cols_to_clean = ['จำนวน', 'ราคา', 'ส่วนลด']
+    current_df[cols_to_clean] = current_df[cols_to_clean].fillna(0.0)
+    # =================================
+
     # ตารางสินค้า
     edited_df = st.data_editor(
         current_df,
