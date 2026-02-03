@@ -370,75 +370,81 @@ with tab1:
         st.download_button("📥 คลิกเพื่อดาวน์โหลด", res_pdf, f"{doc_no}.pdf", "application/pdf")
 
 # --- TAB 2: จัดการลูกค้า ---
+# --- TAB 2: จัดการลูกค้า (เวอร์ชันแก้ Bug False/True) ---
 with tab2:
     st.header("👥 จัดการฐานข้อมูลลูกค้า")
-    st.info("💡 วิธีลบ: ติ๊กถูกที่ช่อง 'ลบ' หน้าชื่อที่ต้องการ แล้วกดปุ่มสีแดง 'ลบรายการที่เลือก'")
-
-    # Clean ข้อมูลก่อนแสดง
-    if not st.session_state.db_customers.empty:
-        if 'ลบ' not in st.session_state.db_customers.columns:
-            st.session_state.db_customers.insert(0, 'ลบ', False)
-        st.session_state.db_customers = st.session_state.db_customers.fillna("")
     
+    # 1. เตรียมข้อมูลและบังคับให้ 'ลบ' เป็น Boolean เสมอ
+    if 'db_customers' in st.session_state:
+        df_cust = st.session_state.db_customers.copy()
+        if 'ลบ' not in df_cust.columns:
+            df_cust.insert(0, 'ลบ', False)
+        # บังคับให้เป็น Boolean เพื่อให้ Checkbox ขึ้น
+        df_cust['ลบ'] = df_cust['ลบ'].astype(bool)
+        df_cust = df_cust.fillna("")
+    
+    # 2. แสดง Editor โดยระบุประเภทคอลัมน์ให้ชัดเจน
     edited_customers = st.data_editor(
-        st.session_state.db_customers, 
-        num_rows="dynamic", 
+        df_cust,
+        column_config={
+            "ลบ": st.column_config.CheckboxColumn("ลบ", help="ติ๊กเพื่อเลือกรายการที่จะลบ", default=False)
+        },
+        num_rows="dynamic",
         use_container_width=True,
-        key="db_cust_editor_manual" 
+        key="editor_cust_fix"
     )
     
     c_btn1, c_btn2 = st.columns(2)
     with c_btn1:
         if st.button("🗑️ ลบรายการที่เลือก (ลูกค้า)", type="secondary", use_container_width=True):
-            # 1. กรองเอาเฉพาะที่ไม่ได้ติ๊ก
-            new_df = edited_customers[edited_customers['ลบ'] == False]
-            # 2. บันทึก
+            # ลบเฉพาะแถวที่เป็น True จริงๆ
+            new_df = edited_customers[edited_customers['ลบ'] == False].copy()
             save_data(new_df, CUST_FILE)
-            # 3. อัปเดต Memory
             st.session_state.db_customers = new_df
-            # 4. Rerun เพื่อให้ Tab 1 เห็นค่าใหม่ทันที
+            st.success("ลบรายการที่เลือกเรียบร้อย!")
             st.rerun()
 
     with c_btn2:
         if st.button("💾 บันทึกการเปลี่ยนแปลง (ลูกค้า)", type="primary", use_container_width=True):
-            # 1. บันทึก
             save_data(edited_customers, CUST_FILE)
-            # 2. อัปเดต Memory
             st.session_state.db_customers = edited_customers
-            # 3. แจ้งเตือนและ Rerun
-            st.success("✅ บันทึกข้อมูลลูกค้าเรียบร้อย!")
+            st.success("บันทึกข้อมูลสำเร็จ!")
             st.rerun()
 
-# --- TAB 3: จัดการสินค้า ---
+# --- TAB 3: จัดการสินค้า (เวอร์ชันแก้ Bug False/True) ---
 with tab3:
     st.header("📦 จัดการฐานข้อมูลสินค้า")
-    st.info("💡 วิธีลบ: ติ๊กถูกที่ช่อง 'ลบ' หน้าชื่อที่ต้องการ แล้วกดปุ่มสีแดง 'ลบรายการที่เลือก'")
     
-    if not st.session_state.db_products.empty:
-        if 'ลบ' not in st.session_state.db_products.columns:
-            st.session_state.db_products.insert(0, 'ลบ', False)
-        if 'ราคา' in st.session_state.db_products.columns:
-            st.session_state.db_products['ราคา'] = st.session_state.db_products['ราคา'].fillna(0.0)
-        st.session_state.db_products = st.session_state.db_products.fillna("")
-    
+    if 'db_products' in st.session_state:
+        df_prod = st.session_state.db_products.copy()
+        if 'ลบ' not in df_prod.columns:
+            df_prod.insert(0, 'ลบ', False)
+        df_prod['ลบ'] = df_prod['ลบ'].astype(bool)
+        df_prod = df_prod.fillna("")
+
     edited_products = st.data_editor(
-        st.session_state.db_products, 
-        num_rows="dynamic", 
+        df_prod,
+        column_config={
+            "ลบ": st.column_config.CheckboxColumn("ลบ", help="ติ๊กเพื่อเลือกรายการที่จะลบ", default=False)
+        },
+        num_rows="dynamic",
         use_container_width=True,
-        key="db_prod_editor_manual"
+        key="editor_prod_fix"
     )
     
     p_btn1, p_btn2 = st.columns(2)
     with p_btn1:
         if st.button("🗑️ ลบรายการที่เลือก (สินค้า)", type="secondary", use_container_width=True):
-            new_df_p = edited_products[edited_products['ลบ'] == False]
+            new_df_p = edited_products[edited_products['ลบ'] == False].copy()
             save_data(new_df_p, PROD_FILE)
             st.session_state.db_products = new_df_p
+            st.success("ลบสินค้าที่เลือกเรียบร้อย!")
             st.rerun()
 
     with p_btn2:
         if st.button("💾 บันทึกการเปลี่ยนแปลง (สินค้า)", type="primary", use_container_width=True):
-            save_data(edited_products, PROD_FILE) 
+            save_data(edited_products, PROD_FILE)
             st.session_state.db_products = edited_products
-            st.success("✅ บันทึกข้อมูลสินค้าเรียบร้อย!")
+            st.success("บันทึกข้อมูลสินค้าสำเร็จ!")
             st.rerun()
+
