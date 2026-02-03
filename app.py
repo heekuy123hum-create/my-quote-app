@@ -400,7 +400,7 @@ with tab2:
             st.rerun()
 
     with c_btn2:
-        if st.button("💾 บันทึกการเปลี่ยนแปลง (ลูกค้า)", type="primary", use_container_width=True):
+        if st.button("💾 บันทึกการเปลี่ยนแปลง(กด2ที)", type="primary", use_container_width=True):
             # บันทึกค่าล่าสุดจากหน้าจอลงไฟล์ทันที
             save_data(edited_customers, CUST_FILE)
             # อัปเดต RAM หลัก
@@ -434,11 +434,12 @@ with tab3:
             st.rerun()
 
     with p_btn2:
-        if st.button("💾 บันทึกการเปลี่ยนแปลง (สินค้า)", type="primary", use_container_width=True):
+        if st.button("💾 บันทึกการเปลี่ยนแปลง(กด2ที)", type="primary", use_container_width=True):
             save_data(edited_products, PROD_FILE) 
             st.session_state.db_products = edited_products
             st.success("✅ บันทึกสำเร็จ!")
             st.rerun() # กดครั้งเดียวจบ ข้อมูลอัปเดตทั้งระบบ
+
 
 
 
