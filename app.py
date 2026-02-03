@@ -438,8 +438,8 @@ with tab3:
             save_data(edited_products, PROD_FILE) 
             st.session_state.db_products = edited_products
             st.success("✅ บันทึกสำเร็จ!")
-            st.rerun()
             st.rerun() # กดครั้งเดียวจบ ข้อมูลอัปเดตทั้งระบบ
+
 
 
 
