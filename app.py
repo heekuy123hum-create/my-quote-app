@@ -5,9 +5,9 @@ import os
 from fpdf import FPDF
 
 # ==========================================
-# 1. ตั้งค่าหน้าเว็บและ Session State (ห้ามตัดออก)
+# 1. ตั้งค่าระบบและ Database
 # ==========================================
-st.set_page_config(page_title="ระบบออกใบเสนอราคา (Full Version)", layout="wide", page_icon="🏢")
+st.set_page_config(page_title="ระบบออกใบเสนอราคา", layout="wide", page_icon="🏢")
 
 # ชื่อไฟล์ Database
 CUST_FILE = "database_customers.csv"
@@ -15,7 +15,7 @@ PROD_FILE = "database_products.csv"
 
 # เริ่มต้นตัวแปร Session State (เก็บค่าระหว่างการใช้งาน)
 if "grid_df" not in st.session_state:
-    # สร้างตารางเปล่า 20 บรรทัด
+    # สร้างตารางเปล่า 20 บรรทัดสำหรับหน้าเสนอราคา
     st.session_state.grid_df = pd.DataFrame(
         [{"รหัสสินค้า": "", "รายการ": "", "จำนวน": 0, "หน่วย": "", "ราคา": 0.0, "ส่วนลด": 0.0}] * 20
     )
@@ -35,7 +35,6 @@ def load_data():
                 temp_df['รหัส'] = temp_df['รหัส'].astype(str)
                 st.session_state.db_customers = temp_df
             except:
-                st.error(f"ไฟล์ {CUST_FILE} เสียหาย กำลังสร้างใหม่...")
                 st.session_state.db_customers = pd.DataFrame(columns=["รหัส", "ชื่อบริษัท", "ผู้ติดต่อ", "ที่อยู่", "โทร", "แฟกซ์"])
         else:
             # ข้อมูลตัวอย่างเริ่มต้น
@@ -44,7 +43,7 @@ def load_data():
                 {"รหัส": "C002", "ชื่อบริษัท": "บริษัท ตัวอย่าง จำกัด", "ผู้ติดต่อ": "คุณสมชาย", "ที่อยู่": "123 กทม.", "โทร": "081-000-0000", "แฟกซ์": "-"}
             ])
         
-        # เพิ่มคอลัมน์ 'ลบ' ถ้ายังไม่มี
+        # เพิ่มคอลัมน์ 'ลบ' ไว้หน้าสุดถ้ายังไม่มี
         if 'ลบ' not in st.session_state.db_customers.columns:
             st.session_state.db_customers.insert(0, 'ลบ', False)
 
@@ -89,166 +88,163 @@ def to_num(val):
         return 0.0
 
 # ==========================================
-# 3. ระบบสร้าง PDF (รองรับภาษาไทย)
+# 3. ระบบสร้าง PDF (ตามดีไซน์ที่คุณส่งมา)
 # ==========================================
-def create_pdf(d, items_df, summary, sigs, remark_text, show_vat):
+def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line):
     pdf = FPDF(unit='mm', format='A4')
     pdf.set_margins(10, 10, 10)
     pdf.set_auto_page_break(auto=False)
     pdf.add_page()
     
-    # 3.1 ตั้งค่าฟอนต์ (ต้องมีไฟล์ THSarabunNew.ttf ในโฟลเดอร์เดียวกับโค้ด)
-    font_path = "THSarabunNew.ttf" 
-    has_font = os.path.exists(font_path)
-    if has_font:
+    # Font Setup
+    font_path = "THSarabunNew.ttf"
+    if os.path.exists(font_path):
         pdf.add_font('THSarabun', '', font_path, uni=True)
         pdf.add_font('THSarabun', 'B', font_path, uni=True)
-        main_font = 'THSarabun'
+        use_f = 'THSarabun'
     else:
-        main_font = 'Arial' # Fallback ถ้าไม่มีฟอนต์ไทย
+        use_f = 'Arial'
 
-    # 3.2 ใส่โลโก้ (ถ้ามีไฟล์ logo.png/jpg)
+    # โลโก้บริษัท
     for ext in ['png', 'jpg', 'jpeg']:
         if os.path.exists(f"logo.{ext}"):
-            pdf.image(f"logo.{ext}", x=10, y=8, w=25)
+            pdf.image(f"logo.{ext}", x=10, y=10, w=22)
             break
+            
+    # Header: ข้อมูลฝั่งเรา (ซ้าย)
+    pdf.set_xy(35, 10)
+    pdf.set_font(use_f, 'B', 14)
+    header_text = f"บริษัท: {d['my_comp']}\nที่อยู่: {d['my_addr']}\nโทร: {d['my_tel']} โทรสาร: {d['my_fax']}\nเลขผู้เสียภาษี: {d['my_tax']}"
+    pdf.multi_cell(100, 6, header_text, 0, 'L')
 
-    # 3.3 ส่วนหัวเอกสาร (Header)
-    pdf.set_xy(38, 10)
-    pdf.set_font(main_font, 'B', 16)
-    pdf.cell(0, 8, d['my_comp'], 0, 1, 'L')
-    
-    pdf.set_x(38)
-    pdf.set_font(main_font, '', 12)
-    pdf.multi_cell(100, 5, f"{d['my_addr']}\nโทร: {d['my_tel']} แฟกซ์: {d['my_fax']}\nเลขผู้เสียภาษี: {d['my_tax']}", 0, 'L')
+    # Header: เลขที่เอกสาร (ขวา)
+    pdf.set_xy(145, 10)
+    pdf.set_font(use_f, 'B', 12)
+    pdf.cell(55, 16, "", 1, 0) # กรอบเลขที่
+    pdf.set_xy(146, 12)
+    pdf.multi_cell(53, 6, f"เลขที่: {d['doc_no']}\nวันที่: {d['doc_date']}", 0, 'L')
 
-    # กล่องเลขที่เอกสารขวาบน
-    pdf.set_xy(140, 10)
-    pdf.set_font(main_font, 'B', 12)
-    pdf.cell(60, 20, "", 1) # กรอบ
-    pdf.set_xy(142, 12)
-    pdf.cell(58, 5, f"เลขที่: {d['doc_no']}", 0, 1, 'L')
-    pdf.set_x(142)
-    pdf.cell(58, 5, f"วันที่: {d['doc_date']}", 0, 1, 'L')
-    pdf.set_x(142)
-    pdf.cell(58, 5, "หน้า 1 / 1", 0, 1, 'L')
-
-    # ชื่อเอกสาร
-    pdf.set_y(40)
-    pdf.set_font(main_font, 'B', 20)
+    # Title
+    pdf.set_y(42)
+    pdf.set_font(use_f, 'B', 24)
     pdf.cell(0, 10, "ใบเสนอราคา (QUOTATION)", 0, 1, 'C')
 
-    # 3.4 ข้อมูลลูกค้า (Customer Info)
+    # ข้อมูลลูกค้า & เงื่อนไข (จัดวาง 2 ฝั่ง)
+    pdf.set_font(use_f, '', 14)
     pdf.ln(2)
-    start_y = pdf.get_y()
+    start_info_y = pdf.get_y()
     
-    # ฝั่งซ้าย
-    pdf.set_xy(10, start_y)
-    pdf.set_font(main_font, '', 12)
-    pdf.multi_cell(110, 6, f"ลูกค้า: {d['c_name']}\nผู้ติดต่อ: {d['contact']}\nที่อยู่: {d['c_addr']}\nโทร: {d['c_tel']} แฟกซ์: {d['c_fax']}", 0, 'L')
+    # ฝั่งลูกค้า
+    pdf.set_xy(10, start_info_y)
+    cust_info = f"ชื่อผู้ติดต่อ: {d['contact']}\nบริษัท: {d['c_name']}\nที่อยู่: {d['c_addr']}\nโทร: {d['c_tel']}  โทรสาร: {d['c_fax']}"
+    pdf.multi_cell(115, 6, cust_info, 0, 'L')
+    y_left = pdf.get_y()
     
-    # ฝั่งขวา (เงื่อนไข)
-    pdf.set_xy(130, start_y)
-    pdf.multi_cell(70, 6, f"วันที่ส่งของ: {d['due_date']}\nยืนราคา: {d['valid_days']} วัน\nเครดิต: {d['credit']} วัน\nวันหมดอายุ: {d['exp_date']}", 0, 'L')
+    # ฝั่งเงื่อนไข
+    pdf.set_xy(130, start_info_y)
+    terms_info = f"วันที่กำหนดส่ง: {d['due_date']}\nยืนราคา (วัน): {d['valid_days']}  Expire Date: {d['exp_date']}\nเครดิต (วัน): {d['credit']}"
+    pdf.multi_cell(75, 6, terms_info, 0, 'L')
+    y_right = pdf.get_y()
     
-    # ขยับ Cursor ลงมาต่ำสุด
-    pdf.set_y(max(pdf.get_y(), start_y + 35))
+    # ระยะห่างก่อนตาราง
+    pdf.set_y(max(y_left, y_right) + 5)
 
-    # 3.5 ตารางสินค้า (Table)
-    pdf.set_fill_color(230, 230, 230)
-    pdf.set_font(main_font, 'B', 11)
-    cols = [15, 80, 20, 15, 25, 15, 25] # ความกว้างคอลัมน์
-    headers = ["รหัส", "รายการสินค้า", "จำนวน", "หน่วย", "ราคา/หน่วย", "ส่วนลด", "จำนวนเงิน"]
+    # ตารางสินค้า (Fix 20 บรรทัด)
+    pdf.set_fill_color(240, 240, 240)
+    pdf.set_font(use_f, 'B', 11)
     
-    for i, h in enumerate(headers):
-        pdf.cell(cols[i], 8, h, 1, 0, 'C', True)
+    w = [15, 75, 15, 15, 25, 15, 30]
+    headers = ["รหัสสินค้า", "รายการ", "จำนวน", "หน่วย", "ราคา/หน่วย", "ส่วนลด", "จำนวนเงิน"]
+    
+    for i in range(len(headers)):
+        pdf.cell(w[i], 8, headers[i], 1, 0, 'C', True)
     pdf.ln()
 
-    # วนลูปรายการสินค้า
-    pdf.set_font(main_font, '', 11)
-    for idx, row in items_df.iterrows():
-        name = str(row['รายการ'])
-        if not name or name == "0" or name == "": continue # ข้ามแถวว่าง
-
-        # ดึงค่าและจัด Format
-        qty = to_num(row['จำนวน'])
-        price = to_num(row['ราคา'])
-        disc = to_num(row['ส่วนลด'])
-        total = (qty * price) - disc
-        
-        data = [
-            str(row['รหัสสินค้า']),
-            name,
-            f"{qty:,.2f}",
-            str(row['หน่วย']),
-            f"{price:,.2f}",
-            f"{disc:,.2f}",
-            f"{total:,.2f}"
-        ]
-        
-        # วาด Cell
-        for i, txt in enumerate(data):
-            align = 'L' if i == 1 else 'R' # ชื่อชิดซ้าย ที่เหลือชิดขวา
-            if i == 0 or i == 3: align = 'C' # รหัสกับหน่วยกึ่งกลาง
-            pdf.cell(cols[i], 7, txt, 1, 0, align)
+    pdf.set_font(use_f, '', 11)
+    row_height = 6.0
+    
+    # วนลูปสร้างบรรทัดตาราง 20 บรรทัดเสมอ (ตามความต้องการที่ว่าห้ามหาย)
+    for i in range(20):
+        if i < len(items_df):
+            row = items_df.iloc[i]
+            # เช็คว่ามีรายการไหม
+            item_name = str(row.get('รายการ','')).strip()
+            if item_name != "" and item_name != "0":
+                vals = [
+                    str(row.get('รหัสสินค้า','')),
+                    item_name,
+                    f"{to_num(row.get('จำนวน')):,.0f}",
+                    str(row.get('หน่วย','')),
+                    f"{to_num(row.get('ราคา')):,.0f}",
+                    f"{to_num(row.get('ส่วนลด')):,.0f}",
+                    f"{to_num(row.get('รวมเงิน',0)):,.0f}"
+                ]
+            else:
+                vals = [""] * 7
+        else:
+            vals = [""] * 7
+            
+        for j in range(7):
+            align = 'L' if j == 1 else 'C'
+            if j == 6: align = 'R'
+            pdf.cell(w[j], row_height, vals[j], 1, 0, align)
         pdf.ln()
 
-    # 3.6 สรุปยอดเงิน (Totals)
+    # Footer: สรุปยอดเงิน
     pdf.ln(2)
-    y_after_table = pdf.get_y()
+    footer_y = pdf.get_y()
     
     # หมายเหตุ (ซ้าย)
-    pdf.set_xy(10, y_after_table)
-    pdf.set_font(main_font, 'B', 12)
-    pdf.cell(20, 6, "หมายเหตุ:", 0, 1)
-    pdf.set_font(main_font, '', 11)
-    pdf.multi_cell(110, 5, remark_text, 0, 'L')
-
-    # ตัวเลข (ขวา)
-    x_label = 130
-    x_val = 170
-    curr_y = y_after_table
+    pdf.set_xy(10, footer_y)
+    pdf.set_font(use_f, 'B', 12)
+    pdf.cell(20, 6, "หมายเหตุ:", 0, 1, 'L')
+    pdf.set_font(use_f, '', 12)
+    pdf.set_x(10)
+    pdf.multi_cell(105, 5, remark_text, 0, 'L')
     
-    def print_summary(label, val, bold=False):
+    # ยอดคำนวณ (ขวา)
+    curr_y = footer_y
+    label_x = 125
+    val_x = 175
+
+    def add_total_row(label, value, is_bold=False, is_red=False):
         nonlocal curr_y
-        pdf.set_xy(x_label, curr_y)
-        pdf.set_font(main_font, 'B' if bold else '', 12)
-        pdf.cell(40, 6, label, 0, 0, 'R')
-        pdf.set_xy(x_val, curr_y)
-        pdf.cell(30, 6, f"{val:,.2f}", 1 if bold else 0, 1, 'R')
-        curr_y += 6
+        pdf.set_font(use_f, 'B' if is_bold else '', 13 if is_bold else 12)
+        if is_red: pdf.set_text_color(180, 0, 0)
+        else: pdf.set_text_color(0, 0, 0)
+        
+        pdf.set_xy(label_x, curr_y)
+        pdf.cell(45, 5.5, label, 0, 0, 'R')
+        pdf.set_xy(val_x, curr_y)
+        pdf.cell(25, 5.5, f"{value:,.2f}", 'B', 1, 'R')
+        curr_y += 5.5
 
-    print_summary("รวมเงิน:", summary['gross'])
-    print_summary("ส่วนลดรวม:", summary['discount'])
-    print_summary("ยอดหลังหักส่วนลด:", summary['subtotal'])
-    
-    if show_vat:
-        print_summary("ภาษีมูลค่าเพิ่ม 7%:", summary['vat'])
-    
-    print_summary("จำนวนเงินสุทธิ:", summary['grand_total'], True)
-    
-    # แสดงตัวหนังสือบาท (Text Baht) - ถ้าต้องการฟังก์ชันนี้ต้องเพิ่ม BahtText library (ใส่ตัวอย่างไว้แบบ static ก่อน)
-    pdf.set_xy(10, curr_y + 2)
-    pdf.set_font(main_font, 'B', 11)
-    pdf.cell(100, 6, f"( ราคารวมภาษีมูลค่าเพิ่มแล้ว )", 0, 1, 'L')
+    add_total_row("รวมเงินย่อย (Gross Total):", summary['gross'])
+    add_total_row("ส่วนลด (Total Discount):", summary['discount'])
+    add_total_row("หลังหักส่วนลด (Sub Total):", summary['subtotal'])
+    if show_vat_line:
+        add_total_row("ภาษีมูลค่าเพิ่ม (VAT 7%):", summary['vat'])
+    add_total_row("ยอดรวมทั้งสิ้น (Grand Total):", summary['grand_total'], True, True)
 
-    # 3.7 ลายเซ็น (Signatures)
-    pdf.set_y(-40) # 4cm จากด้านล่าง
+    # ลายเซ็น (ท้ายหน้า)
+    pdf.set_y(-35)
+    pdf.set_text_color(0, 0, 0)
+    pdf.set_font(use_f, '', 11)
+    
+    sig_titles = ["ผู้อนุมัติซื้อ (ลูกค้า)", "พนักงานขาย", "ผู้จัดการฝ่ายขาย"]
+    sig_names = [sigs['s1'], sigs['s2'], sigs['s3']]
+    sig_x = [10, 75, 140]
     sig_y = pdf.get_y()
     
-    positions = [10, 75, 140]
-    titles = ["ผู้สั่งซื้อสินค้า", "พนักงานขาย", "ผู้อนุมัติ"]
-    names = [sigs['s1'], sigs['s2'], sigs['s3']]
-    
     for i in range(3):
-        pdf.set_xy(positions[i], sig_y)
-        pdf.cell(50, 5, "..................................", 0, 1, 'C')
-        pdf.set_xy(positions[i], sig_y + 5)
-        pdf.cell(50, 5, titles[i], 0, 1, 'C')
-        pdf.set_xy(positions[i], sig_y + 10)
-        pdf.cell(50, 5, f"({names[i]})" if names[i] else "(..................................)", 0, 1, 'C')
-        pdf.set_xy(positions[i], sig_y + 15)
-        pdf.cell(50, 5, "วันที่ ...../...../..........", 0, 1, 'C')
+        pdf.set_xy(sig_x[i], sig_y)
+        pdf.cell(60, 5, "...................................................", 0, 1, 'C')
+        pdf.set_xy(sig_x[i], sig_y + 5)
+        pdf.cell(60, 5, sig_titles[i], 0, 1, 'C')
+        pdf.set_xy(sig_x[i], sig_y + 10)
+        pdf.cell(60, 5, f"({sig_names[i]})" if sig_names[i] else "(...................................................)", 0, 1, 'C')
+        pdf.set_xy(sig_x[i], sig_y + 15)
+        pdf.cell(60, 5, "วันที่: ......../......../........", 0, 1, 'C')
 
     return bytes(pdf.output())
 
@@ -266,7 +262,7 @@ with tab1:
     with c1:
         st.subheader("ข้อมูลผู้ขาย (เรา)")
         my_comp = st.text_input("ชื่อบริษัท", "บริษัท สยามวาณิชย์ จำกัด", key="my_comp")
-        my_addr = st.text_area("ที่อยู่", "123 ถนนสุขุมวิท แขวงคลองเตย เขตคลองเตย กทม. 10110", height=68, key="my_addr")
+        my_addr = st.text_input("ที่อยู่", "123 กทม. 10110", key="my_addr")
         r1, r2 = st.columns(2)
         my_tel = r1.text_input("โทรศัพท์", "02-123-4567", key="my_tel")
         my_tax = r2.text_input("เลขผู้เสียภาษี", "0105551234567", key="my_tax")
@@ -289,7 +285,7 @@ with tab1:
     col_cust_head, col_cust_sel = st.columns([1, 1])
     with col_cust_head: st.subheader("ข้อมูลลูกค้า")
     with col_cust_sel:
-        # ดึงรายชื่อลูกค้าจาก Session State (ที่โหลดมาจากไฟล์)
+        # ดึงรายชื่อลูกค้าจาก Session State (ที่อัปเดตแล้ว)
         cust_list = ["-- พิมพ์เอง --"] + sorted(st.session_state.db_customers['ชื่อบริษัท'].dropna().unique().tolist())
         selected_cust = st.selectbox("🔍 ค้นหาลูกค้าเก่า", cust_list)
 
@@ -324,7 +320,7 @@ with tab1:
     # เตรียม Dropdown รหัสสินค้า
     prod_codes = sorted(st.session_state.db_products['รหัสสินค้า'].dropna().unique().astype(str).tolist())
     
-    # แสดงตารางให้แก้ไขได้
+    # แสดงตารางให้แก้ไขได้ (ซ่อน index ด้วย hide_index=True)
     edited_df = st.data_editor(
         st.session_state.grid_df,
         column_config={
@@ -336,6 +332,7 @@ with tab1:
         },
         num_rows="dynamic",
         use_container_width=True,
+        hide_index=True,  # ซ่อนตัวเลขแถว
         key="quotation_grid"
     )
 
@@ -361,16 +358,16 @@ with tab1:
     else:
         st.session_state.grid_df = edited_df
 
-    # คำนวณยอดเงิน
+    # คำนวณยอดเงิน (สำหรับส่งเข้า PDF)
     calc_df = edited_df.copy()
     calc_df['qty'] = calc_df['จำนวน'].apply(to_num)
     calc_df['price'] = calc_df['ราคา'].apply(to_num)
     calc_df['disc'] = calc_df['ส่วนลด'].apply(to_num)
-    calc_df['total'] = (calc_df['qty'] * calc_df['price']) - calc_df['disc']
+    calc_df['รวมเงิน'] = (calc_df['qty'] * calc_df['price']) - calc_df['disc'] # ใช้ชื่อคอลัมน์ภาษาไทยให้ตรงกับ create_pdf
     
     sum_gross = (calc_df['qty'] * calc_df['price']).sum()
     sum_disc = calc_df['disc'].sum()
-    sum_subtotal = calc_df['total'].sum()
+    sum_subtotal = calc_df['รวมเงิน'].sum()
 
     # ส่วนสรุปและลายเซ็น
     foot1, foot2 = st.columns([2, 1])
@@ -399,7 +396,7 @@ with tab1:
         
         st.metric("ยอดสุทธิ (Grand Total)", f"{grand_total:,.2f} บาท")
         
-        # ปุ่มสร้าง PDF (ปรับให้ใหญ่เต็มจอสำหรับมือถือ)
+        # ปุ่มสร้าง PDF (เต็มจอสำหรับมือถือ)
         if st.button("🖨️ สร้าง PDF และ ดาวน์โหลด", type="primary", use_container_width=True):
             if c_name == "":
                 st.error("กรุณาระบุชื่อลูกค้าก่อนสร้างเอกสาร")
@@ -411,11 +408,11 @@ with tab1:
                         "valid_days": valid_days, "credit": credit, "exp_date": exp_date,
                         "c_name": c_name, "contact": c_contact, "c_addr": c_addr, "c_tel": c_tel, "c_fax": c_fax
                     },
-                    items_df=edited_df,
+                    items_df=calc_df,
                     summary={"gross": sum_gross, "discount": sum_disc, "subtotal": sum_subtotal, "vat": vat_amount, "grand_total": grand_total},
                     sigs={"s1": sig_cust, "s2": sig_sale, "s3": sig_mgr},
                     remark_text=remark,
-                    show_vat=use_vat
+                    show_vat_line=use_vat
                 )
                 st.success("สร้างเอกสารสำเร็จ!")
                 st.download_button(
@@ -432,11 +429,12 @@ with tab1:
 with tab2:
     st.header("จัดการฐานข้อมูลลูกค้า")
     
-    # ใช้ Data Editor แก้ไขได้เลย
+    # ใช้ Data Editor (ซ่อน index)
     edited_cust = st.data_editor(
         st.session_state.db_customers,
         num_rows="dynamic",
         use_container_width=True,
+        hide_index=True,  # ซ่อนเลขแถว 0, 1, 2
         column_config={
             "ลบ": st.column_config.CheckboxColumn("ลบ", help="ติ๊กเพื่อลบแถวนี้", default=False),
             "รหัส": st.column_config.TextColumn("รหัส", width="small"),
@@ -460,12 +458,11 @@ with tab2:
             # แจ้งเตือน
             st.toast("บันทึกข้อมูลลูกค้าเรียบร้อย!", icon="✅")
             
-            # *** หัวใจสำคัญ: รีเฟรชหน้าจอทันที เพื่อให้ Tab 1 เห็นข้อมูลใหม่ ***
+            # *** สำคัญ: Rerun เพื่อให้ Tab 1 เห็นข้อมูลใหม่ทันที ***
             st.rerun()
 
     with col_btn2:
-        if st.button("❌ ยกเลิก / รีโหลดใหม่", use_container_width=True):
-            # ล้าง Session เพื่อโหลดใหม่จากไฟล์
+        if st.button("❌ รีโหลด/ยกเลิก", use_container_width=True):
             del st.session_state.db_customers
             st.rerun()
 
@@ -475,10 +472,12 @@ with tab2:
 with tab3:
     st.header("จัดการฐานข้อมูลสินค้า")
     
+    # ใช้ Data Editor (ซ่อน index)
     edited_prod = st.data_editor(
         st.session_state.db_products,
         num_rows="dynamic",
         use_container_width=True,
+        hide_index=True,  # ซ่อนเลขแถว 0, 1, 2
         column_config={
             "ลบ": st.column_config.CheckboxColumn("ลบ", default=False),
             "รหัสสินค้า": st.column_config.TextColumn("รหัส", width="small"),
@@ -503,7 +502,7 @@ with tab3:
             # แจ้งเตือน
             st.toast("บันทึกข้อมูลสินค้าเรียบร้อย!", icon="✅")
             
-            # *** หัวใจสำคัญ: รีเฟรชหน้าจอทันที ***
+            # *** สำคัญ: Rerun เพื่อให้ Tab 1 เห็นข้อมูลใหม่ทันที ***
             st.rerun()
 
     with col_p2:
