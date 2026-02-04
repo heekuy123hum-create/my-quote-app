@@ -13,13 +13,18 @@ st.set_page_config(page_title="SIWAKIT Enterprise System", layout="wide")
 CUST_FILE = "database_customers.csv"
 PROD_FILE = "database_products.csv"
 
-# ฟังก์ชันโหลดข้อมูล (ปรับปรุง Logic ให้โหลดแม่นยำและไม่คืนค่าเดิม)
+# ฟังก์ชันโหลดข้อมูล (ปรับปรุง Logic ให้โหลดแม่นยำและลบคอลัมน์ขยะทิ้งทันที)
 def load_data():
     # --- 1. โหลดลูกค้า ---
     if "db_customers" not in st.session_state:
         if os.path.exists(CUST_FILE):
             try:
-                st.session_state.db_customers = pd.read_csv(CUST_FILE)
+                # อ่านไฟล์มาเก็บในตัวแปรชั่วคราวก่อน
+                temp_df = pd.read_csv(CUST_FILE)
+                # [แก้ไข] ตรวจสอบและลบคอลัมน์ index (Unnamed: 0) ที่อาจติดมาจากไฟล์เก่า
+                if 'Unnamed: 0' in temp_df.columns:
+                    temp_df = temp_df.drop(columns=['Unnamed: 0'])
+                st.session_state.db_customers = temp_df
             except:
                 # กรณีไฟล์เสีย ให้สร้างใหม่
                 st.session_state.db_customers = pd.DataFrame([{"รหัส": "C001", "ชื่อบริษัท": "ตัวอย่าง", "ผู้ติดต่อ": "สมชาย", "ที่อยู่": "กทม.", "โทร": "081", "แฟกซ์": "-"}])
@@ -38,7 +43,11 @@ def load_data():
     if "db_products" not in st.session_state:
         if os.path.exists(PROD_FILE):
             try:
-                st.session_state.db_products = pd.read_csv(PROD_FILE)
+                temp_df_p = pd.read_csv(PROD_FILE)
+                # [แก้ไข] ตรวจสอบและลบคอลัมน์ index (Unnamed: 0) ที่อาจติดมาจากไฟล์เก่า
+                if 'Unnamed: 0' in temp_df_p.columns:
+                    temp_df_p = temp_df_p.drop(columns=['Unnamed: 0'])
+                st.session_state.db_products = temp_df_p
             except:
                 st.session_state.db_products = pd.DataFrame([{"รหัสสินค้า": "P001", "รายการ": "สินค้า A", "ราคา": 100, "หน่วย": "ชิ้น"}])
         else:
@@ -52,11 +61,16 @@ def load_data():
         if 'ลบ' not in st.session_state.db_products.columns:
             st.session_state.db_products.insert(0, 'ลบ', False)
 
-# ฟังก์ชันบันทึกข้อมูลลง CSV (ตัดช่อง 'ลบ' ออกก่อนเซฟ)
+# ฟังก์ชันบันทึกข้อมูลลง CSV (ตัดช่อง 'ลบ' และ 'Unnamed' ออกก่อนเซฟ)
 def save_data(df, filename):
     df_to_save = df.copy()
+    # ลบคอลัมน์ 'ลบ' (Checkbox)
     if 'ลบ' in df_to_save.columns:
         df_to_save = df_to_save.drop(columns=['ลบ'])
+    # [แก้ไข] ป้องกันการเซฟคอลัมน์ Index ติดไปด้วย (Double check)
+    if 'Unnamed: 0' in df_to_save.columns:
+        df_to_save = df_to_save.drop(columns=['Unnamed: 0'])
+        
     df_to_save.to_csv(filename, index=False)
 
 # เรียกใช้โหลดข้อมูลทันที
@@ -436,10 +450,3 @@ with tab3:
             st.session_state.db_products = edited_products
             st.success("✅ บันทึกสำเร็จ!")
             st.rerun()
-
-
-
-
-
-
-
