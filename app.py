@@ -410,7 +410,7 @@ with tab1:
         remark = st.text_area("📝 หมายเหตุ", value="1. สินค้ารับประกัน 1 ปี\n2. กำหนดยืนราคาตามที่ระบุในเอกสาร", key="remark_in")
     with f_col2:
         st.write("### สรุปยอดเงิน")
-        has_vat = st.checkbox("✅ คิด VAT 7%", value=True, key="has_vat_in")
+        has_vat = st.checkbox("คิด VAT 7%", value=True, key="has_vat_in")
         vat_val = (sum_sub * 0.07) if has_vat else 0.0
         grand_total = sum_sub + vat_val
 
@@ -577,3 +577,4 @@ with tab4:
             
     else:
         st.info("ยังไม่มีประวัติการสร้างใบเสนอราคา")
+
