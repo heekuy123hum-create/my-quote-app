@@ -73,11 +73,16 @@ def load_data():
     if "db_history" not in st.session_state:
         if os.path.exists(HISTORY_FILE):
             try:
-                st.session_state.db_history = pd.read_csv(HISTORY_FILE, encoding='utf-8-sig')
+                temp_hist = pd.read_csv(HISTORY_FILE, encoding='utf-8-sig')
+                # เพิ่มคอลัมน์ "ลบ" สำหรับหน้าประวัติ
+                if 'ลบ' not in temp_hist.columns:
+                    temp_hist.insert(0, 'ลบ', False)
+                temp_hist['ลบ'] = temp_hist['ลบ'].fillna(False).astype(bool)
+                st.session_state.db_history = temp_hist
             except:
-                 st.session_state.db_history = pd.DataFrame(columns=["timestamp", "doc_no", "customer", "total", "data_json"])
+                 st.session_state.db_history = pd.DataFrame(columns=["ลบ", "timestamp", "doc_no", "customer", "total", "data_json"])
         else:
-            st.session_state.db_history = pd.DataFrame(columns=["timestamp", "doc_no", "customer", "total", "data_json"])
+            st.session_state.db_history = pd.DataFrame(columns=["ลบ", "timestamp", "doc_no", "customer", "total", "data_json"])
 
 def save_data(df, filename):
     """ฟังก์ชันบันทึก Dataframe ลง CSV"""
@@ -87,13 +92,11 @@ def save_data(df, filename):
     if 'ลบ' in df_to_save.columns:
         df_to_save['ลบ'] = df_to_save['ลบ'].fillna(False).astype(bool)
 
-    # กรองแถวว่าง
+    # กรองแถวว่าง (กรณีไม่ใช่ History)
     if 'รหัสสินค้า' in df_to_save.columns:
         df_to_save = df_to_save[df_to_save['รหัสสินค้า'].astype(str).str.strip() != ""]
-        df_to_save = df_to_save[df_to_save['รหัสสินค้า'].notna()]
     elif 'ชื่อบริษัท' in df_to_save.columns:
         df_to_save = df_to_save[df_to_save['ชื่อบริษัท'].astype(str).str.strip() != ""]
-        df_to_save = df_to_save[df_to_save['ชื่อบริษัท'].notna()]
 
     if 'Unnamed: 0' in df_to_save.columns:
         df_to_save = df_to_save.drop(columns=['Unnamed: 0'])
@@ -335,7 +338,6 @@ with tab1:
         current_customers = st.session_state.db_customers['ชื่อบริษัท'].dropna().unique().tolist()
         c_list = ["-- พิมพ์เอง --"] + [str(x) for x in current_customers if str(x).strip() != ""]
         
-        # เพิ่ม on_change callback เพื่อให้ดึงข้อมูลทันทีเมื่อเลือก
         sel_c = st.selectbox(
             "📥 ดึงข้อมูลลูกค้าเก่า", 
             c_list, 
@@ -343,7 +345,6 @@ with tab1:
             on_change=update_customer_fields 
         )
 
-    # ไม่ต้องใช้ตัวแปร default รับค่า value แล้ว เพราะ Callback จัดการ update session_state ให้
     c_col1, c_col2 = st.columns(2)
     with c_col1:
         c_name = st.text_input("ชื่อบริษัทลูกค้า", key="c_name_in")
@@ -427,6 +428,7 @@ with tab1:
 
     if st.button("🚀 สร้าง PDF + บันทึกประวัติ", type="primary", use_container_width=True):
         history_data = {
+            "ลบ": False,
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "doc_no": doc_no,
             "customer": c_name,
@@ -459,12 +461,11 @@ with tab1:
         st.download_button("📥 คลิกเพื่อดาวน์โหลด PDF", res_pdf, f"{doc_no}.pdf", "application/pdf", use_container_width=True)
 
 # ------------------------------------------------------------------
-# TAB 2: ลูกค้า (แก้คลิกเดียว + อัปเดตทันที)
+# TAB 2: ลูกค้า
 # ------------------------------------------------------------------
 with tab2:
     st.header("👥 จัดการฐานข้อมูลลูกค้า")
     
-    # ใช้ Data Editor
     edited_customers = st.data_editor(
         st.session_state.db_customers, 
         num_rows="dynamic", 
@@ -478,28 +479,21 @@ with tab2:
     
     with col_c1:
         if st.button("💾 บันทึกการแก้ไข/เพิ่มใหม่", type="primary", use_container_width=True, key="btn_save_customer"):
-            # 1. อัปเดต Session State ทันทีเพื่อให้ Tab 1 เห็นข้อมูลใหม่
             st.session_state.db_customers = edited_customers
-            # 2. บันทึกลงไฟล์
             save_data(edited_customers, CUST_FILE)
             st.toast("✅ บันทึกข้อมูลเรียบร้อย")
-            # 3. Rerun ทันทีเพื่อให้ปุ่มกดครั้งเดียวจบ
             st.rerun()
 
     with col_c2:
         if st.button("❌ ลบรายการที่ติ๊กถูก (Check)", use_container_width=True, key="btn_del_customer"):
-            # 1. กรองเอาเฉพาะรายการที่ไม่ได้ติ๊กลบ
             df_to_keep = edited_customers[edited_customers['ลบ'] == False]
-            # 2. อัปเดต Session State
             st.session_state.db_customers = df_to_keep
-            # 3. บันทึกลงไฟล์
             save_data(df_to_keep, CUST_FILE)
             st.toast("🗑️ ลบรายการเรียบร้อย")
-            # 4. Rerun ทันที
             st.rerun()
 
 # ------------------------------------------------------------------
-# TAB 3: สินค้า (แก้คลิกเดียว + อัปเดตทันที)
+# TAB 3: สินค้า
 # ------------------------------------------------------------------
 with tab3:
     st.header("📦 จัดการฐานข้อมูลสินค้า")
@@ -532,28 +526,54 @@ with tab3:
             st.rerun()
 
 # ------------------------------------------------------------------
-# TAB 4: ประวัติ
+# TAB 4: ประวัติ (เพิ่มฟังก์ชันลบ)
 # ------------------------------------------------------------------
 with tab4:
     st.header("🗂️ ประวัติใบเสนอราคา")
     
     if not st.session_state.db_history.empty:
-        history_view = st.session_state.db_history[['timestamp', 'doc_no', 'customer', 'total']].copy()
-        history_view.columns = ["วัน-เวลาที่สร้าง", "เลขที่เอกสาร", "ชื่อลูกค้า", "ยอดรวม"]
-        
+        # ส่วนสำหรับการเลือกและโหลดข้อมูล
         sel_history = st.selectbox(
             "เลือกเอกสารเพื่อโหลดข้อมูลกลับมาแก้ไข", 
-            history_view["เลขที่เอกสาร"].tolist(),
+            st.session_state.db_history["doc_no"].tolist(),
             key="history_selector_box" 
         )
         
         st.button(
-            "🔄 โหลดข้อมูลเก่ามาแก้ไข (Tab 1)", 
+            "🔄 โโหลดข้อมูลเก่ามาแก้ไข (Tab 1)", 
             use_container_width=True, 
             on_click=restore_history_callback 
         )
-           
+            
         st.divider()
-        st.dataframe(history_view, use_container_width=True, hide_index=True)
+        
+        # ส่วนแสดงตารางพร้อมความสามารถในการลบ
+        st.subheader("รายการประวัติทั้งหมด")
+        
+        # แสดง Data Editor สำหรับประวัติ
+        edited_history = st.data_editor(
+            st.session_state.db_history,
+            column_config={
+                "ลบ": st.column_config.CheckboxColumn("ลบประวัติ", default=False),
+                "timestamp": st.column_config.TextColumn("วัน-เวลาที่สร้าง", disabled=True),
+                "doc_no": st.column_config.TextColumn("เลขที่เอกสาร", disabled=True),
+                "customer": st.column_config.TextColumn("ชื่อลูกค้า", disabled=True),
+                "total": st.column_config.NumberColumn("ยอดรวม", format="%.2f", disabled=True),
+                "data_json": None  # ซ่อนคอลัมน์ JSON
+            },
+            column_order=("ลบ", "timestamp", "doc_no", "customer", "total"),
+            use_container_width=True,
+            hide_index=True,
+            key="history_table_editor"
+        )
+        
+        if st.button("🗑️ ยืนยันการลบประวัติที่เลือก", use_container_width=True, type="secondary"):
+            # กรองแถวที่ไม่ได้ติ๊กลบ
+            df_hist_keep = edited_history[edited_history['ลบ'] == False]
+            st.session_state.db_history = df_hist_keep
+            save_data(df_hist_keep, HISTORY_FILE)
+            st.toast("🗑️ ลบประวัติเรียบร้อยแล้ว")
+            st.rerun()
+            
     else:
         st.info("ยังไม่มีประวัติการสร้างใบเสนอราคา")
