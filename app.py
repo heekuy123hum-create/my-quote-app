@@ -30,25 +30,19 @@ def load_data():
     if "db_customers" not in st.session_state:
         if os.path.exists(CUST_FILE):
             try:
-                # โหลด CSV มาแล้ว Reset Index ทันทีเพื่อไม่ให้มีเลขแถวติดมา
                 temp_df = pd.read_csv(CUST_FILE, encoding='utf-8-sig')
-                # ลบคอลัมน์ขยะที่อาจติดมา
                 if 'Unnamed: 0' in temp_df.columns: 
                     temp_df = temp_df.drop(columns=['Unnamed: 0'])
-                
-                # บังคับ Reset Index
                 temp_df = temp_df.reset_index(drop=True)
                 st.session_state.db_customers = temp_df
             except:
                 st.session_state.db_customers = pd.DataFrame(columns=["ลบ", "รหัส", "ชื่อบริษัท", "ผู้ติดต่อ", "ที่อยู่", "โทร", "แฟกซ์"])
         else:
-            # ข้อมูลตัวอย่าง
             st.session_state.db_customers = pd.DataFrame([
-                {"ลบ": False, "รหัส": "C001", "ชื่อบริษัท": "บริษัท ตัวอย่าง จำกัด", "ผู้ติดต่อ": "คุณสมชาย", "ที่อยู่": "123 กทม.", "โทร": "081-111-1111", "แฟกซ์": "02-222-2222"},
-                {"ลบ": False, "รหัส": "C002", "ชื่อบริษัท": "หจก. ทดสอบระบบ", "ผู้ติดต่อ": "คุณสมหญิง", "ที่อยู่": "456 เชียงใหม่", "โทร": "089-999-9999", "แฟกซ์": "-"}
+                {"ลบ": False, "รหัส": "C001", "ชื่อบริษัท": "บริษัท ตัวอย่าง จำกัด", "ผู้ติดต่อ": "คุณสมชาย", "ที่อยู่": "123 กทม.", "โทร": "081-111-1111", "แฟกซ์": "02-222-2222"}
             ])
         
-        # ตรวจสอบคอลัมน์ลบ และบังคับให้เป็น Boolean เสมอ
+        # ตรวจสอบและสร้างคอลัมน์ ลบ
         if 'ลบ' not in st.session_state.db_customers.columns:
             st.session_state.db_customers.insert(0, 'ลบ', False)
         st.session_state.db_customers['ลบ'] = st.session_state.db_customers['ลบ'].fillna(False).astype(bool)
@@ -62,21 +56,15 @@ def load_data():
                     temp_df_p = temp_df_p.drop(columns=['Unnamed: 0'])
                 if 'รหัสสินค้า' in temp_df_p.columns:
                     temp_df_p['รหัสสินค้า'] = temp_df_p['รหัสสินค้า'].astype(str)
-                
-                # บังคับ Reset Index
                 temp_df_p = temp_df_p.reset_index(drop=True)
                 st.session_state.db_products = temp_df_p
             except:
                 st.session_state.db_products = pd.DataFrame(columns=["ลบ", "รหัสสินค้า", "รายการ", "ราคา", "หน่วย"])
         else:
-            # ข้อมูลตัวอย่าง
             st.session_state.db_products = pd.DataFrame([
-                {"ลบ": False, "รหัสสินค้า": "P001", "รายการ": "สินค้าตัวอย่าง A", "ราคา": 1500.0, "หน่วย": "ชิ้น"},
-                {"ลบ": False, "รหัสสินค้า": "P002", "รายการ": "สินค้าตัวอย่าง B", "ราคา": 2500.0, "หน่วย": "เครื่อง"},
-                {"ลบ": False, "รหัสสินค้า": "P003", "รายการ": "ค่าบริการติดตั้ง", "ราคา": 5000.0, "หน่วย": "งาน"}
+                {"ลบ": False, "รหัสสินค้า": "P001", "รายการ": "สินค้าตัวอย่าง A", "ราคา": 1500.0, "หน่วย": "ชิ้น"}
             ])
         
-        # ตรวจสอบคอลัมน์ลบ และบังคับให้เป็น Boolean เสมอ
         if 'ลบ' not in st.session_state.db_products.columns:
             st.session_state.db_products.insert(0, 'ลบ', False)
         st.session_state.db_products['ลบ'] = st.session_state.db_products['ลบ'].fillna(False).astype(bool)
@@ -92,13 +80,14 @@ def load_data():
             st.session_state.db_history = pd.DataFrame(columns=["timestamp", "doc_no", "customer", "total", "data_json"])
 
 def save_data(df, filename):
-    """ฟังก์ชันบันทึก Dataframe ลง CSV ตัดคอลัมน์ที่ไม่จำเป็นออก"""
+    """ฟังก์ชันบันทึก Dataframe ลง CSV"""
     df_to_save = df.copy()
     
-    # หมายเหตุ: เราไม่ลบคอลัมน์ 'ลบ' ทิ้งตอนบันทึกแล้ว เพื่อให้สถานะ Checkbox ยังอยู่
-    # แต่เราจะเคลียร์ค่า True ออกหลังจากลบเสร็จใน Logic ปุ่มกด
-        
-    # กรองข้อมูล: ลบแถวที่ว่างเปล่าจริงๆ ออก
+    # แปลงคอลัมน์ลบเป็น bool เสมอ
+    if 'ลบ' in df_to_save.columns:
+        df_to_save['ลบ'] = df_to_save['ลบ'].fillna(False).astype(bool)
+
+    # กรองแถวว่าง
     if 'รหัสสินค้า' in df_to_save.columns:
         df_to_save = df_to_save[df_to_save['รหัสสินค้า'].astype(str).str.strip() != ""]
         df_to_save = df_to_save[df_to_save['รหัสสินค้า'].notna()]
@@ -109,14 +98,11 @@ def save_data(df, filename):
     if 'Unnamed: 0' in df_to_save.columns:
         df_to_save = df_to_save.drop(columns=['Unnamed: 0'])
     
-    # Reset Index อีกครั้งก่อนบันทึกเพื่อให้เลขสวยงาม และไม่เก็บ Index ลงไฟล์
     df_to_save = df_to_save.reset_index(drop=True)
-    
     df_to_save.to_csv(filename, index=False, encoding='utf-8-sig')
     return df_to_save
 
 def to_num(val):
-    """ฟังก์ชันแปลงข้อความตัวเลขที่มีลูกน้ำ เป็น float"""
     try:
         if isinstance(val, str):
             val = val.replace(',', '')
@@ -124,7 +110,7 @@ def to_num(val):
     except:
         return 0.0
 
-# เรียกใช้ฟังก์ชันโหลดข้อมูลทันที
+# เรียกใช้โหลดข้อมูล
 load_data()
 
 # ==========================================
@@ -276,6 +262,21 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line):
 # ==========================================
 # 4. CALLBACK FUNCTIONS
 # ==========================================
+def update_customer_fields():
+    """Callback function เพื่ออัปเดตข้อมูลลูกค้าทันทีเมื่อเลือก Dropdown"""
+    selected_val = st.session_state.cust_selector_tab1
+    if selected_val and selected_val != "-- พิมพ์เอง --":
+        # ค้นหาข้อมูลจาก DataFrame
+        found = st.session_state.db_customers[st.session_state.db_customers['ชื่อบริษัท'] == selected_val]
+        if not found.empty:
+            row = found.iloc[0]
+            # อัปเดต Session State ของ Text Input โดยตรง
+            st.session_state.c_name_in = str(row['ชื่อบริษัท'])
+            st.session_state.contact_in = str(row['ผู้ติดต่อ']) if pd.notna(row['ผู้ติดต่อ']) else ""
+            st.session_state.c_addr_in = str(row['ที่อยู่']) if pd.notna(row['ที่อยู่']) else ""
+            st.session_state.c_tel_in = str(row['โทร']) if pd.notna(row['โทร']) else ""
+            st.session_state.c_fax_in = str(row['แฟกซ์']) if pd.notna(row['แฟกซ์']) else ""
+
 def restore_history_callback():
     sel_doc = st.session_state.get("history_selector_box")
     if sel_doc:
@@ -333,24 +334,25 @@ with tab1:
     with c_h2: 
         current_customers = st.session_state.db_customers['ชื่อบริษัท'].dropna().unique().tolist()
         c_list = ["-- พิมพ์เอง --"] + [str(x) for x in current_customers if str(x).strip() != ""]
-        sel_c = st.selectbox("📥 ดึงข้อมูลลูกค้าเก่า", c_list, key="cust_selector_tab1")
+        
+        # เพิ่ม on_change callback เพื่อให้ดึงข้อมูลทันทีเมื่อเลือก
+        sel_c = st.selectbox(
+            "📥 ดึงข้อมูลลูกค้าเก่า", 
+            c_list, 
+            key="cust_selector_tab1",
+            on_change=update_customer_fields 
+        )
 
-    def_name, def_cont, def_addr, def_tel, def_fax = "", "", "", "", ""
-    if sel_c != "-- พิมพ์เอง --":
-        found_c = st.session_state.db_customers[st.session_state.db_customers['ชื่อบริษัท'] == sel_c]
-        if not found_c.empty:
-            row_c = found_c.iloc[0]
-            def_name, def_cont, def_addr, def_tel, def_fax = row_c['ชื่อบริษัท'], row_c['ผู้ติดต่อ'], row_c['ที่อยู่'], row_c['โทร'], row_c['แฟกซ์']
-
+    # ไม่ต้องใช้ตัวแปร default รับค่า value แล้ว เพราะ Callback จัดการ update session_state ให้
     c_col1, c_col2 = st.columns(2)
     with c_col1:
-        c_name = st.text_input("ชื่อบริษัทลูกค้า", value=def_name, key="c_name_in")
-        contact = st.text_input("ชื่อผู้ติดต่อ", value=def_cont, key="contact_in")
-        c_addr = st.text_area("ที่อยู่จัดส่ง/วางบิล", value=def_addr, height=70, key="c_addr_in")
+        c_name = st.text_input("ชื่อบริษัทลูกค้า", key="c_name_in")
+        contact = st.text_input("ชื่อผู้ติดต่อ", key="contact_in")
+        c_addr = st.text_area("ที่อยู่จัดส่ง/วางบิล", height=70, key="c_addr_in")
     with c_col2:
         st.write("<br><br>", unsafe_allow_html=True) 
-        c_tel = st.text_input("เบอร์โทรศัพท์ลูกค้า", value=def_tel, key="c_tel_in")
-        c_fax = st.text_input("เบอร์แฟกซ์ลูกค้า", value=def_fax, key="c_fax_in")
+        c_tel = st.text_input("เบอร์โทรศัพท์ลูกค้า", key="c_tel_in")
+        c_fax = st.text_input("เบอร์แฟกซ์ลูกค้า", key="c_fax_in")
 
     st.subheader("📦 รายการสินค้า")
     current_products = st.session_state.db_products['รหัสสินค้า'].dropna().unique().tolist()
@@ -457,76 +459,75 @@ with tab1:
         st.download_button("📥 คลิกเพื่อดาวน์โหลด PDF", res_pdf, f"{doc_no}.pdf", "application/pdf", use_container_width=True)
 
 # ------------------------------------------------------------------
-# TAB 2: ลูกค้า (แยกปุ่ม + ซ่อน Index + แก้ปัญหาคลิก 2 ที)
+# TAB 2: ลูกค้า (แก้คลิกเดียว + อัปเดตทันที)
 # ------------------------------------------------------------------
 with tab2:
     st.header("👥 จัดการฐานข้อมูลลูกค้า")
     
-    # 1. แสดง Data Editor โดยซ่อน Index และรับค่าการแก้ไข
+    # ใช้ Data Editor
     edited_customers = st.data_editor(
         st.session_state.db_customers, 
         num_rows="dynamic", 
         use_container_width=True, 
-        hide_index=True, # << ซ่อน Index หน้าตารางตามคำขอ
+        hide_index=True, 
         column_config={"ลบ": st.column_config.CheckboxColumn("ลบ?", default=False, width="small")},
         key="db_cust_editor_final"
     )
     
-    # 2. แยกปุ่มกด 2 ปุ่มตามคำขอ
     col_c1, col_c2 = st.columns(2)
     
     with col_c1:
-        # ปุ่มบันทึกการแก้ไข (เพิ่ม/แก้คำผิด) - สีเขียว (primary)
         if st.button("💾 บันทึกการแก้ไข/เพิ่มใหม่", type="primary", use_container_width=True, key="btn_save_customer"):
-            # บันทึกสถานะปัจจุบันลงไฟล์ทันที
-            new_db = save_data(edited_customers, CUST_FILE)
-            st.session_state.db_customers = new_db
+            # 1. อัปเดต Session State ทันทีเพื่อให้ Tab 1 เห็นข้อมูลใหม่
+            st.session_state.db_customers = edited_customers
+            # 2. บันทึกลงไฟล์
+            save_data(edited_customers, CUST_FILE)
             st.toast("✅ บันทึกข้อมูลเรียบร้อย")
-            st.rerun() # รีเฟรชทันที ไม่ต้องกดซ้ำ
+            # 3. Rerun ทันทีเพื่อให้ปุ่มกดครั้งเดียวจบ
+            st.rerun()
 
     with col_c2:
-        # ปุ่มลบรายการที่ติ๊ก - สีปกติ (secondary) แต่ใส่ Emoji เตือน
         if st.button("❌ ลบรายการที่ติ๊กถูก (Check)", use_container_width=True, key="btn_del_customer"):
-            # กรองเอาเฉพาะแถวที่ 'ลบ' เป็น False (คือเก็บไว้)
+            # 1. กรองเอาเฉพาะรายการที่ไม่ได้ติ๊กลบ
             df_to_keep = edited_customers[edited_customers['ลบ'] == False]
-            # บันทึกลงไฟล์
-            new_db = save_data(df_to_keep, CUST_FILE)
-            st.session_state.db_customers = new_db
+            # 2. อัปเดต Session State
+            st.session_state.db_customers = df_to_keep
+            # 3. บันทึกลงไฟล์
+            save_data(df_to_keep, CUST_FILE)
             st.toast("🗑️ ลบรายการเรียบร้อย")
-            st.rerun() # รีเฟรชทันที
+            # 4. Rerun ทันที
+            st.rerun()
 
 # ------------------------------------------------------------------
-# TAB 3: สินค้า (แยกปุ่ม + ซ่อน Index + แก้ปัญหาคลิก 2 ที)
+# TAB 3: สินค้า (แก้คลิกเดียว + อัปเดตทันที)
 # ------------------------------------------------------------------
 with tab3:
     st.header("📦 จัดการฐานข้อมูลสินค้า")
     
-    # 1. แสดง Data Editor โดยซ่อน Index
     edited_products = st.data_editor(
         st.session_state.db_products, 
         column_order=("ลบ", "รหัสสินค้า", "รายการ", "ราคา", "หน่วย"),
         num_rows="dynamic", 
         use_container_width=True, 
-        hide_index=True, # << ซ่อน Index หน้าตารางตามคำขอ
+        hide_index=True, 
         column_config={"ลบ": st.column_config.CheckboxColumn("ลบ?", default=False, width="small")},
         key="db_prod_editor_final"
     )
     
-    # 2. แยกปุ่มกด 2 ปุ่ม
     col_p1, col_p2 = st.columns(2)
     
     with col_p1:
         if st.button("💾 บันทึกการแก้ไข/เพิ่มใหม่", type="primary", use_container_width=True, key="btn_save_product"):
-            new_db_p = save_data(edited_products, PROD_FILE)
-            st.session_state.db_products = new_db_p
+            st.session_state.db_products = edited_products
+            save_data(edited_products, PROD_FILE)
             st.toast("✅ บันทึกข้อมูลเรียบร้อย")
             st.rerun()
 
     with col_p2:
         if st.button("❌ ลบรายการที่ติ๊กถูก (Check)", use_container_width=True, key="btn_del_product"):
             df_p_keep = edited_products[edited_products['ลบ'] == False]
-            new_db_p = save_data(df_p_keep, PROD_FILE)
-            st.session_state.db_products = new_db_p
+            st.session_state.db_products = df_p_keep
+            save_data(df_p_keep, PROD_FILE)
             st.toast("🗑️ ลบรายการเรียบร้อย")
             st.rerun()
 
