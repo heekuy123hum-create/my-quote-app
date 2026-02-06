@@ -19,7 +19,7 @@ HISTORY_FILE = "history_quotes.csv"
 if "grid_df" not in st.session_state:
     # สร้างตารางเปล่า 20 บรรทัด สำหรับรายการสินค้า
     st.session_state.grid_df = pd.DataFrame(
-        [{"รหัสสินค้า": "", "รายการ": "", "จำนวน": 0, "หน่วย": "", "ราคา": 0.0, "ส่วนลด": 0.0}] * 20
+        [{"รหัสสินค้า": "", "รายการ": "", "จำนวน": 0.0, "หน่วย": "", "ราคา": 0.0, "ส่วนลด": 0.0}] * 20
     )
 
 # ==========================================
@@ -36,10 +36,10 @@ def load_data():
                 temp_df = temp_df.reset_index(drop=True)
                 st.session_state.db_customers = temp_df
             except:
-                st.session_state.db_customers = pd.DataFrame(columns=["ลบ", "ชื่อบริษัท", "ผู้ติดต่อ", "ที่อยู่", "โทร", "แฟกซ์"])
+                st.session_state.db_customers = pd.DataFrame(columns=["ลบ", "รหัส", "ชื่อบริษัท", "ผู้ติดต่อ", "ที่อยู่", "โทร", "แฟกซ์"])
         else:
             st.session_state.db_customers = pd.DataFrame([
-                {"ลบ": False, "ชื่อบริษัท": "บริษัท ตัวอย่าง จำกัด", "ผู้ติดต่อ": "คุณสมชาย", "ที่อยู่": "123 กทม.", "โทร": "081-111-1111", "แฟกซ์": "02-222-2222"}
+                {"ลบ": False, "รหัส": "C001", "ชื่อบริษัท": "บริษัท ตัวอย่าง จำกัด", "ผู้ติดต่อ": "คุณสมชาย", "ที่อยู่": "123 กทม.", "โทร": "081-111-1111", "แฟกซ์": "02-222-2222"}
             ])
         
         # ตรวจสอบและสร้างคอลัมน์ ลบ
@@ -74,14 +74,11 @@ def load_data():
         if os.path.exists(HISTORY_FILE):
             try:
                 temp_hist = pd.read_csv(HISTORY_FILE, encoding='utf-8-sig')
-                # เพิ่มคอลัมน์ "ลบ" สำหรับหน้าประวัติ
                 if 'ลบ' not in temp_hist.columns:
                     temp_hist.insert(0, 'ลบ', False)
                 temp_hist['ลบ'] = temp_hist['ลบ'].fillna(False).astype(bool)
-                
                 if 'Unnamed: 0' in temp_hist.columns:
                     temp_hist = temp_hist.drop(columns=['Unnamed: 0'])
-                    
                 st.session_state.db_history = temp_hist
             except:
                  st.session_state.db_history = pd.DataFrame(columns=["ลบ", "timestamp", "doc_no", "customer", "total", "data_json"])
@@ -113,7 +110,7 @@ def to_num(val):
     try:
         if isinstance(val, str):
             val = val.replace(',', '')
-        return float(val) if val else 0.0
+        return float(val) if val is not None else 0.0
     except:
         return 0.0
 
@@ -273,11 +270,9 @@ def update_customer_fields():
     """Callback function เพื่ออัปเดตข้อมูลลูกค้าทันทีเมื่อเลือก Dropdown"""
     selected_val = st.session_state.cust_selector_tab1
     if selected_val and selected_val != "-- พิมพ์เอง --":
-        # ค้นหาข้อมูลจาก DataFrame
         found = st.session_state.db_customers[st.session_state.db_customers['ชื่อบริษัท'] == selected_val]
         if not found.empty:
             row = found.iloc[0]
-            # อัปเดต Session State ของ Text Input โดยตรง
             st.session_state.c_name_in = str(row['ชื่อบริษัท'])
             st.session_state.contact_in = str(row['ผู้ติดต่อ']) if pd.notna(row['ผู้ติดต่อ']) else ""
             st.session_state.c_addr_in = str(row['ที่อยู่']) if pd.notna(row['ที่อยู่']) else ""
@@ -290,9 +285,7 @@ def restore_history_callback():
         row_data = st.session_state.db_history[st.session_state.db_history['doc_no'] == sel_doc].iloc[0]
         try:
             saved_data = json.loads(row_data['data_json'])
-            
             st.session_state.grid_df = pd.DataFrame.from_dict(saved_data['grid_df'])
-            
             keys_map = {
                 "doc_no_in": "doc_no", "doc_date_in": "doc_date", "due_date_in": "due_date",
                 "valid_days_in": "valid_days", "credit_in": "credit", "exp_date_in": "exp_date",
@@ -300,18 +293,16 @@ def restore_history_callback():
                 "c_tel_in": "c_tel", "c_fax_in": "c_fax", "remark_in": "remark", 
                 "has_vat_in": "has_vat", "s1_in": "s1", "s2_in": "s2", "s3_in": "s3"
             }
-            
             for key_ss, key_json in keys_map.items():
                 if key_json in saved_data:
                     st.session_state[key_ss] = saved_data[key_json]
-            
             st.toast(f"✅ โหลดข้อมูล {sel_doc} เรียบร้อย! กรุณากลับไปที่ Tab 1", icon="🔄")
         except:
              st.error("เกิดข้อผิดพลาดในการโหลดไฟล์ JSON ประวัติ")
 
 def clear_all_data():
     st.session_state.grid_df = pd.DataFrame(
-        [{"รหัสสินค้า": "", "รายการ": "", "จำนวน": 0, "หน่วย": "", "ราคา": 0.0, "ส่วนลด": 0.0}] * 20
+        [{"รหัสสินค้า": "", "รายการ": "", "จำนวน": 0.0, "หน่วย": "", "ราคา": 0.0, "ส่วนลด": 0.0}] * 20
     )
     keys_to_reset = [
         "c_name_in", "contact_in", "c_addr_in", "c_tel_in", "c_fax_in",
@@ -319,7 +310,6 @@ def clear_all_data():
     ]
     for k in keys_to_reset:
         st.session_state[k] = ""
-    
     st.session_state["cust_selector_tab1"] = "-- พิมพ์เอง --"
     st.session_state["doc_no_in"] = f"QT-{datetime.now().strftime('%Y%m%d')}-001"
     st.toast("ล้างข้อมูลหน้าจอเรียบร้อย", icon="🗑️")
@@ -385,16 +375,18 @@ with tab1:
     st.subheader("📦 รายการสินค้า")
     current_products = st.session_state.db_products['รหัสสินค้า'].dropna().unique().tolist()
     p_codes = [str(x) for x in current_products if str(x).strip() != ""]
-    current_df = st.session_state.grid_df.fillna(0)
+    
+    # Force fillna ก่อนส่งเข้า Editor เพื่อป้องกัน None
+    current_df = st.session_state.grid_df.copy()
     
     edited_df = st.data_editor(
         current_df,
         column_config={
             "รหัสสินค้า": st.column_config.SelectboxColumn("รหัสสินค้า", options=p_codes, width="medium"),
             "รายการ": st.column_config.TextColumn("รายการสินค้า", width="large"),
-            "จำนวน": st.column_config.NumberColumn("จำนวน", min_value=0, format="%.2f"),
-            "ราคา": st.column_config.NumberColumn("ราคา/หน่วย", min_value=0, format="%.2f"),
-            "ส่วนลด": st.column_config.NumberColumn("ส่วนลด", format="%.2f")
+            "จำนวน": st.column_config.NumberColumn("จำนวน", min_value=0.0, step=1.0, format="%.2f", default=0.0),
+            "ราคา": st.column_config.NumberColumn("ราคา/หน่วย", min_value=0.0, format="%.2f", default=0.0),
+            "ส่วนลด": st.column_config.NumberColumn("ส่วนลด", format="%.2f", default=0.0)
         },
         column_order=("รหัสสินค้า", "รายการ", "จำนวน", "หน่วย", "ราคา", "ส่วนลด"),
         num_rows="dynamic",
@@ -403,6 +395,7 @@ with tab1:
         key="editor_main"
     )
 
+    # Logic: Auto-fill Product Info when Code is selected
     needs_rerun = False
     for idx, row in edited_df.iterrows():
         code = str(row['รหัสสินค้า'])
@@ -410,7 +403,9 @@ with tab1:
             found_prod = st.session_state.db_products[st.session_state.db_products['รหัสสินค้า'].astype(str) == code]
             if not found_prod.empty:
                 p_info = found_prod.iloc[0]
-                if row['รายการ'] != p_info['รายการ']:
+                # เช็คว่ารายการว่างหรือเปลี่ยนไปจากเดิมหรือไม่ เพื่ออัปเดต
+                current_item = str(row.get('รายการ',''))
+                if current_item != p_info['รายการ']:
                     edited_df.at[idx, 'รายการ'] = p_info['รายการ']
                     edited_df.at[idx, 'หน่วย'] = p_info['หน่วย']
                     edited_df.at[idx, 'ราคา'] = p_info['ราคา']
@@ -420,8 +415,11 @@ with tab1:
         st.session_state.grid_df = edited_df
         st.rerun()
     else:
+        # Sync ข้อมูลกลับ Session เพื่อให้ไม่หาย
         st.session_state.grid_df = edited_df
 
+    # --- Real-time Calculation Logic ---
+    # ใช้ edited_df ที่ได้จาก Editor โดยตรงมาคำนวณ
     calc_df = edited_df.copy()
     calc_df['q'] = calc_df['จำนวน'].apply(to_num)
     calc_df['p'] = calc_df['ราคา'].apply(to_num)
@@ -496,69 +494,71 @@ with tab1:
             st.download_button("📥 คลิกเพื่อดาวน์โหลด PDF", res_pdf, f"{doc_no}.pdf", "application/pdf", use_container_width=True)
 
 # ------------------------------------------------------------------
-# TAB 2: ลูกค้า (COPY FROM ORIGINAL REQ)
+# TAB 2: ลูกค้า (FIXED: รวม Save/Delete ในปุ่มเดียว)
 # ------------------------------------------------------------------
 with tab2:
     st.header("👥 จัดการฐานข้อมูลลูกค้า")
+    st.info("💡 วิธีใช้งาน: แก้ไขข้อมูลในตารางโดยตรง หรือติ๊กช่อง 'ลบ' หน้าแถวที่ต้องการลบ แล้วกดปุ่มบันทึกด้านล่างเพียงปุ่มเดียว")
     
     edited_customers = st.data_editor(
         st.session_state.db_customers, 
         num_rows="dynamic", 
         use_container_width=True, 
         hide_index=True, 
-        column_config={"ลบ": st.column_config.CheckboxColumn("ลบ?", default=False, width="small")},
+        column_config={
+            "ลบ": st.column_config.CheckboxColumn("ลบ (ติ๊กเพื่อลบ)", default=False, width="small"),
+            "รหัส": st.column_config.TextColumn("รหัส", width="small"),
+            "ชื่อบริษัท": st.column_config.TextColumn("ชื่อบริษัท", width="medium"),
+            "ผู้ติดต่อ": st.column_config.TextColumn("ผู้ติดต่อ", width="medium")
+        },
         key="db_cust_editor_final"
     )
     
-    col_c1, col_c2 = st.columns(2)
-    
-    with col_c1:
-        if st.button("💾 บันทึกการแก้ไข/เพิ่มใหม่ (ลูกค้า)", type="primary", use_container_width=True, key="btn_save_customer"):
-            st.session_state.db_customers = edited_customers
-            save_data(edited_customers, CUST_FILE)
-            st.toast("✅ บันทึกข้อมูลเรียบร้อย")
-            st.rerun()
-
-    with col_c2:
-        if st.button("❌ ลบลูกค้าที่ติ๊กถูก (Check)", use_container_width=True, key="btn_del_customer"):
-            df_to_keep = edited_customers[edited_customers['ลบ'] == False]
-            st.session_state.db_customers = df_to_keep
-            save_data(df_to_keep, CUST_FILE)
-            st.toast("🗑️ ลบรายการเรียบร้อย")
-            st.rerun()
+    if st.button("💾 บันทึกการเปลี่ยนแปลง (Save Changes)", type="primary", use_container_width=True, key="btn_save_customer_fixed"):
+        # Logic: กรองเฉพาะแถวที่ไม่ได้ติ๊กลบ และลบแถวที่ติ๊กออกทันที
+        df_to_save = edited_customers[edited_customers['ลบ'] == False].copy()
+        
+        # บันทึกลง Session State และไฟล์
+        st.session_state.db_customers = df_to_save
+        save_data(df_to_save, CUST_FILE)
+        
+        st.toast("✅ บันทึกข้อมูลและกำจัดรายการที่เลือกลบเรียบร้อยแล้ว", icon="💾")
+        st.rerun()
 
 # ------------------------------------------------------------------
-# TAB 3: สินค้า (COPY FROM ORIGINAL REQ)
+# TAB 3: สินค้า (FIXED: รวม Save/Delete ในปุ่มเดียว - เหมือน Tab 2)
 # ------------------------------------------------------------------
 with tab3:
     st.header("📦 จัดการฐานข้อมูลสินค้า")
+    st.info("💡 วิธีใช้งาน: แก้ไขข้อมูลในตารางโดยตรง หรือติ๊กช่อง 'ลบ' หน้าแถวที่ต้องการลบ แล้วกดปุ่มบันทึกด้านล่างเพียงปุ่มเดียว")
     
+    # ใช้ Checkbox Column 'ลบ' เหมือน Tab 2
     edited_products = st.data_editor(
         st.session_state.db_products, 
         column_order=("ลบ", "รหัสสินค้า", "รายการ", "ราคา", "หน่วย"),
         num_rows="dynamic", 
         use_container_width=True, 
         hide_index=True, 
-        column_config={"ลบ": st.column_config.CheckboxColumn("ลบ?", default=False, width="small")},
-        key="db_prod_editor_final"
+        column_config={
+            "ลบ": st.column_config.CheckboxColumn("ลบ (ติ๊กเพื่อลบ)", default=False, width="small"),
+            "รหัสสินค้า": st.column_config.TextColumn("รหัสสินค้า", width="small"),
+            "รายการ": st.column_config.TextColumn("รายการสินค้า", width="large"),
+            "ราคา": st.column_config.NumberColumn("ราคา", format="%.2f"),
+        },
+        key="db_prod_editor_final_v2"
     )
     
-    col_p1, col_p2 = st.columns(2)
-    
-    with col_p1:
-        if st.button("💾 บันทึกการแก้ไข/เพิ่มใหม่ (สินค้า)", type="primary", use_container_width=True, key="btn_save_product"):
-            st.session_state.db_products = edited_products
-            save_data(edited_products, PROD_FILE)
-            st.toast("✅ บันทึกข้อมูลเรียบร้อย")
-            st.rerun()
-
-    with col_p2:
-        if st.button("❌ ลบสินค้าที่ติ๊กถูก (Check)", use_container_width=True, key="btn_del_product"):
-            df_p_keep = edited_products[edited_products['ลบ'] == False]
-            st.session_state.db_products = df_p_keep
-            save_data(df_p_keep, PROD_FILE)
-            st.toast("🗑️ ลบรายการเรียบร้อย")
-            st.rerun()
+    # ใช้ปุ่มเดียว Logic เดียวกับ Tab 2
+    if st.button("💾 บันทึกการเปลี่ยนแปลง (Save Changes)", type="primary", use_container_width=True, key="btn_save_product_fixed_v2"):
+        # Logic: กรองเฉพาะแถวที่ไม่ได้ติ๊กลบ
+        df_p_save = edited_products[edited_products['ลบ'] == False].copy()
+        
+        # บันทึกลง Session State และไฟล์
+        st.session_state.db_products = df_p_save
+        save_data(df_p_save, PROD_FILE)
+        
+        st.toast("✅ บันทึกข้อมูลและกำจัดรายการที่เลือกลบเรียบร้อยแล้ว", icon="💾")
+        st.rerun()
 
 # ------------------------------------------------------------------
 # TAB 4: ประวัติ
@@ -581,16 +581,15 @@ with tab4:
             
         st.divider()
         
-        # แสดง Data Editor สำหรับประวัติ
         edited_history = st.data_editor(
             st.session_state.db_history,
             column_config={
-                "ลบ": st.column_config.CheckboxColumn("ลบประวัติ", default=False),
+                "ลบ": st.column_config.CheckboxColumn("ลบ (ติ๊กเพื่อลบ)", default=False),
                 "timestamp": st.column_config.TextColumn("วัน-เวลาที่สร้าง", disabled=True),
                 "doc_no": st.column_config.TextColumn("เลขที่เอกสาร", disabled=True),
                 "customer": st.column_config.TextColumn("ชื่อลูกค้า", disabled=True),
                 "total": st.column_config.NumberColumn("ยอดรวม", format="%.2f", disabled=True),
-                "data_json": None  # ซ่อนคอลัมน์ JSON
+                "data_json": None
             },
             column_order=("ลบ", "timestamp", "doc_no", "customer", "total"),
             use_container_width=True,
@@ -598,12 +597,11 @@ with tab4:
             key="history_table_editor"
         )
         
-        if st.button("🗑️ ยืนยันการลบประวัติที่เลือก", use_container_width=True, type="secondary"):
-            # กรองแถวที่ไม่ได้ติ๊กลบ
-            df_hist_keep = edited_history[edited_history['ลบ'] == False]
-            st.session_state.db_history = df_hist_keep
-            save_data(df_hist_keep, HISTORY_FILE)
-            st.toast("🗑️ ลบประวัติเรียบร้อยแล้ว")
+        if st.button("💾 บันทึกและอัปเดตประวัติ (Save Changes)", use_container_width=True, type="primary", key="btn_save_history_fixed"):
+            df_hist_save = edited_history[edited_history['ลบ'] == False].copy()
+            st.session_state.db_history = df_hist_save
+            save_data(df_hist_save, HISTORY_FILE)
+            st.toast("✅ อัปเดตประวัติเรียบร้อยแล้ว", icon="💾")
             st.rerun()
             
     else:
