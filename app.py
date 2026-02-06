@@ -280,6 +280,26 @@ def update_customer_fields():
             st.session_state.c_tel_in = str(row['โทร']) if pd.notna(row['โทร']) else ""
             st.session_state.c_fax_in = str(row['แฟกซ์']) if pd.notna(row['แฟกซ์']) else ""
 
+def clear_screen_callback():
+    """ฟังก์ชันสำหรับปุ่มเคลียร์หน้าจอ ล้างค่า Input และ Grid"""
+    # 1. รีเซ็ต Dropdown
+    st.session_state.cust_selector_tab1 = "-- พิมพ์เอง --"
+    
+    # 2. รีเซ็ตช่องกรอกข้อมูลลูกค้าและเอกสารบางส่วน
+    keys_to_clear = [
+        "c_name_in", "contact_in", "c_addr_in", "c_tel_in", "c_fax_in", "remark_in"
+    ]
+    for key in keys_to_clear:
+        if key in st.session_state:
+            st.session_state[key] = ""
+            
+    # 3. รีเซ็ตตารางสินค้าให้ว่างเปล่า (20 บรรทัด)
+    st.session_state.grid_df = pd.DataFrame(
+        [{"รหัสสินค้า": "", "รายการ": "", "จำนวน": 0, "หน่วย": "", "ราคา": 0.0, "ส่วนลด": 0.0}] * 20
+    )
+    
+    st.toast("🧹 เคลียร์หน้าจอเรียบร้อย!", icon="✨")
+
 def restore_history_callback():
     sel_doc = st.session_state.get("history_selector_box")
     if sel_doc:
@@ -311,12 +331,17 @@ tab1, tab2, tab3, tab4 = st.tabs(["📝 สร้างใบเสนอรา�
 # TAB 1: Quotation
 # ------------------------------------------------------------------
 with tab1:
+    # --- ปุ่มเคลียร์หน้าจออยู่ด้านบนขวา ---
+    top_col1, top_col2 = st.columns([6, 1])
+    with top_col2:
+        st.button("🧹 เคลียร์หน้าจอ", on_click=clear_screen_callback, use_container_width=True, type="secondary")
+
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("🏢 ข้อมูลผู้เสนอราคา")
         my_comp = st.text_input("ชื่อบริษัท", "บริษัท ศิวกิจ เทรดดิ้ง จำกัด", key="my_comp_in")
         my_addr = st.text_input("ที่อยู่บริษัท", "", key="my_addr_in") 
-        my_tel = st.text_input("โทรศัพท์", "", key="my_tel_in")      
+        my_tel = st.text_input("โทรศัพท์", "", key="my_tel_in")       
         my_fax = st.text_input("โทรสาร", "", key="my_fax_in")        
         my_tax = st.text_input("เลขผู้เสียภาษี", "", key="my_tax_in")
     
@@ -360,6 +385,7 @@ with tab1:
     p_codes = [str(x) for x in current_products if str(x).strip() != ""]
     current_df = st.session_state.grid_df.fillna(0)
     
+    # Data Editor - การแก้ไขที่นี่จะ trigger rerun ทำให้คำนวณใหม่ทันที
     edited_df = st.data_editor(
         current_df,
         column_config={
@@ -376,6 +402,7 @@ with tab1:
         key="editor_main"
     )
 
+    # --- ส่วนเช็คสินค้า Auto-Fill และอัปเดต Grid ---
     needs_rerun = False
     for idx, row in edited_df.iterrows():
         code = str(row['รหัสสินค้า'])
@@ -383,18 +410,22 @@ with tab1:
             found_prod = st.session_state.db_products[st.session_state.db_products['รหัสสินค้า'].astype(str) == code]
             if not found_prod.empty:
                 p_info = found_prod.iloc[0]
+                # ถ้าเปลี่ยนรหัสสินค้า แล้วรายการยังไม่เปลี่ยน ให้เปลี่ยนรายการ+ราคาตาม
                 if row['รายการ'] != p_info['รายการ']:
                     edited_df.at[idx, 'รายการ'] = p_info['รายการ']
                     edited_df.at[idx, 'หน่วย'] = p_info['หน่วย']
                     edited_df.at[idx, 'ราคา'] = p_info['ราคา']
                     needs_rerun = True
 
-    if needs_rerun:
-        st.session_state.grid_df = edited_df
-        st.rerun()
-    else:
-        st.session_state.grid_df = edited_df
+    # อัปเดต Session State เพื่อให้ค่าคงอยู่
+    st.session_state.grid_df = edited_df
 
+    # ถ้ามีการเปลี่ยนแปลงข้อมูลสินค้า (Auto-fill) ให้รีรันเพื่อให้หน้าจออัปเดต
+    if needs_rerun:
+        st.rerun()
+
+    # --- ส่วนคำนวณเงิน Real-time ---
+    # ใช้ edited_df ล่าสุดมาคำนวณทันที
     calc_df = edited_df.copy()
     calc_df['q'] = calc_df['จำนวน'].apply(to_num)
     calc_df['p'] = calc_df['ราคา'].apply(to_num)
@@ -409,17 +440,19 @@ with tab1:
     with f_col1:
         remark = st.text_area("📝 หมายเหตุ", value="1. สินค้ารับประกัน 1 ปี\n2. กำหนดยืนราคาตามที่ระบุในเอกสาร", key="remark_in")
     with f_col2:
-        st.write("### สรุปยอดเงิน")
+        st.markdown("### 💰 สรุปยอดเงิน")
         has_vat = st.checkbox("คิด VAT 7%", value=True, key="has_vat_in")
         vat_val = (sum_sub * 0.07) if has_vat else 0.0
         grand_total = sum_sub + vat_val
 
-        st.write(f"รวมเป็นเงิน: {sum_gross:,.2f}")
-        st.write(f"ส่วนลดทั้งหมด: -{sum_disc:,.2f}")
-        st.write(f"ยอดหลังหักส่วนลด: {sum_sub:,.2f}")
+        # แสดงผล Real-time
+        st.write(f"รวมเป็นเงิน: **{sum_gross:,.2f}**")
+        st.write(f"ส่วนลดทั้งหมด: **-{sum_disc:,.2f}**")
+        st.write(f"ยอดหลังหักส่วนลด: **{sum_sub:,.2f}**")
         if has_vat:
-            st.write(f"ภาษีมูลค่าเพิ่ม 7%: {vat_val:,.2f}")
-        st.metric("ยอดรวมทั้งสิ้น", f"{grand_total:,.2f} บาท")
+            st.write(f"ภาษีมูลค่าเพิ่ม 7%: **{vat_val:,.2f}**")
+        
+        st.success(f"### ยอดรวมทั้งสิ้น: {grand_total:,.2f} บาท")
 
     s_col1, s_col2, s_col3 = st.columns(3)
     s1 = s_col1.text_input("ชื่อลูกค้า", key="s1_in")
@@ -577,4 +610,3 @@ with tab4:
             
     else:
         st.info("ยังไม่มีประวัติการสร้างใบเสนอราคา")
-
