@@ -31,15 +31,25 @@ st.markdown("""
         border-radius: 10px;
         color: #155724;
         text-align: center;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
     .metric-label {
         font-size: 1.2rem;
         margin-bottom: 5px;
     }
     .metric-value {
-        font-size: 2.2rem;
+        font-size: 2.5rem;
         font-weight: 800;
         color: #28a745;
+        text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+    }
+    /* ซ่อน VAT ถ้าไม่ได้เลือก */
+    .vat-hidden {
+        display: none;
+    }
+    .vat-visible {
+        display: block;
+        color: #555;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -371,7 +381,7 @@ with tab1:
         with col1:
             my_comp = st.text_input("ชื่อบริษัท", "บริษัท ศิวกิจ เทรดดิ้ง จำกัด", key="my_comp_in")
             my_addr = st.text_input("ที่อยู่บริษัท", "", key="my_addr_in") 
-            my_tel = st.text_input("โทรศัพท์", "", key="my_tel_in")      
+            my_tel = st.text_input("โทรศัพท์", "", key="my_tel_in")       
             my_fax = st.text_input("โทรสาร", "", key="my_fax_in")        
             my_tax = st.text_input("เลขผู้เสียภาษี", "", key="my_tax_in")
         
@@ -492,18 +502,25 @@ with tab1:
     with f_col2:
         # ใช้ HTML แสดงกล่องยอดเงินรวมสวยๆ
         has_vat = st.checkbox("คิด VAT 7%", value=True, key="has_vat_in")
+        
+        # Real-time Logic: ถ้าติ๊ก ให้คำนวณ VAT, ถ้าไม่ติ๊ก ให้ VAT = 0 และซ่อนบรรทัด VAT ในการแสดงผล
         vat_val = (sum_sub * 0.07) if has_vat else 0.0
         grand_total = sum_sub + vat_val
+
+        # ควบคุมการแสดงผลข้อความ VAT ด้วย CSS Class หรือ Python Logic ตรงๆ
+        vat_row_style = "" if has_vat else "display: none;"
 
         st.markdown(f"""
         <div class="metric-card">
             <div class="metric-label">ยอดรวมทั้งสิ้น (Grand Total)</div>
             <div class="metric-value">{grand_total:,.2f} บาท</div>
-            <div style="margin-top: 15px; font-size: 0.9rem; color: #555;">
-                รวมสินค้า: {sum_gross:,.2f}<br>
-                ส่วนลดทั้งหมด: -{sum_disc:,.2f}<br>
-                ยอดก่อน VAT: {sum_sub:,.2f}<br>
-                ภาษีมูลค่าเพิ่ม 7%: {vat_val:,.2f}
+            <div style="margin-top: 15px; font-size: 0.9rem; color: #555; text-align: right; padding-right: 20px;">
+                <table style="width: 100%;">
+                    <tr><td style="text-align: left;">รวมสินค้า:</td><td style="text-align: right;">{sum_gross:,.2f}</td></tr>
+                    <tr><td style="text-align: left;">ส่วนลดทั้งหมด:</td><td style="text-align: right; color: red;">-{sum_disc:,.2f}</td></tr>
+                    <tr><td style="text-align: left; font-weight: bold;">ยอดก่อน VAT:</td><td style="text-align: right; font-weight: bold;">{sum_sub:,.2f}</td></tr>
+                    <tr style="{vat_row_style}"><td style="text-align: left;">ภาษีมูลค่าเพิ่ม 7%:</td><td style="text-align: right;">{vat_val:,.2f}</td></tr>
+                </table>
             </div>
         </div>
         """, unsafe_allow_html=True)
