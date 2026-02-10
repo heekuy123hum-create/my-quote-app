@@ -371,11 +371,7 @@ with tab1:
     with st.container(border=True):
         st.subheader("🏢 ข้อมูลผู้เสนอราคาและเอกสาร")
         
-        h_col1, h_col2 = st.columns([0.85, 0.15])
-        with h_col1:
-            st.write("กรอกข้อมูลบริษัทของท่านและรายละเอียดเอกสาร")
-        with h_col2:
-            st.button("🧹 ล้างค่า", on_click=clear_all_data, type="secondary", use_container_width=True)
+        st.write("กรอกข้อมูลบริษัทของท่านและรายละเอียดเอกสาร")
 
         col1, col2 = st.columns(2)
         with col1:
@@ -386,7 +382,6 @@ with tab1:
             my_tax = st.text_input("เลขผู้เสียภาษี", "", key="my_tax_in")
         
         with col2:
-            st.markdown("---")
             doc_no = st.text_input("เลขที่ใบเสนอราคา", f"QT-{datetime.now().strftime('%Y%m%d')}-001", key="doc_no_in")
             doc_date = st.text_input("วันที่ออกเอกสาร", datetime.now().strftime('%d/%m/%Y'), key="doc_date_in")
             due_date = st.text_input("วันที่กำหนดส่ง", "7 วัน", key="due_date_in")
@@ -527,47 +522,52 @@ with tab1:
 
     st.markdown("###") # เว้นวรรค
     
-    if st.button("🚀 สร้าง PDF + บันทึกประวัติ", type="primary", use_container_width=True):
-        is_duplicate = False
-        if not st.session_state.db_history.empty:
-             if doc_no in st.session_state.db_history['doc_no'].values:
-                 is_duplicate = True
-        
-        if is_duplicate:
-            st.error(f"⚠️ บันทึกไม่สำเร็จ: เลขที่ '{doc_no}' มีอยู่แล้ว")
-        else:
-            history_data = {
-                "ลบ": False,
-                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "doc_no": doc_no,
-                "customer": c_name,
-                "total": grand_total,
-                "data_json": json.dumps({
-                    "grid_df": edited_df.to_dict(),
-                    "doc_date": doc_date, "due_date": due_date, "valid_days": valid_days, "credit": credit, "exp_date": exp_date,
-                    "c_name": c_name, "contact": contact, "c_addr": c_addr, "c_tel": c_tel, "c_fax": c_fax,
-                    "remark": remark, "has_vat": has_vat, "s1": s1, "s2": s2, "s3": s3
-                }, ensure_ascii=False)
-            }
-            new_history = pd.DataFrame([history_data])
-            st.session_state.db_history = pd.concat([new_history, st.session_state.db_history], ignore_index=True)
-            save_data(st.session_state.db_history, HISTORY_FILE)
-            st.toast("บันทึกประวัติเรียบร้อย!", icon="💾")
+    # --- Action Buttons (ย้ายปุ่มล้างค่ามาไว้ตรงนี้คู่กัน) ---
+    btn_col1, btn_col2 = st.columns([0.2, 0.8])
+    with btn_col1:
+        st.button("🧹 ล้างค่า", on_click=clear_all_data, type="secondary", use_container_width=True)
+    with btn_col2:
+        if st.button("🚀 สร้าง PDF + บันทึกประวัติ", type="primary", use_container_width=True):
+            is_duplicate = False
+            if not st.session_state.db_history.empty:
+                if doc_no in st.session_state.db_history['doc_no'].values:
+                    is_duplicate = True
+            
+            if is_duplicate:
+                st.error(f"⚠️ บันทึกไม่สำเร็จ: เลขที่ '{doc_no}' มีอยู่แล้ว")
+            else:
+                history_data = {
+                    "ลบ": False,
+                    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "doc_no": doc_no,
+                    "customer": c_name,
+                    "total": grand_total,
+                    "data_json": json.dumps({
+                        "grid_df": edited_df.to_dict(),
+                        "doc_date": doc_date, "due_date": due_date, "valid_days": valid_days, "credit": credit, "exp_date": exp_date,
+                        "c_name": c_name, "contact": contact, "c_addr": c_addr, "c_tel": c_tel, "c_fax": c_fax,
+                        "remark": remark, "has_vat": has_vat, "s1": s1, "s2": s2, "s3": s3
+                    }, ensure_ascii=False)
+                }
+                new_history = pd.DataFrame([history_data])
+                st.session_state.db_history = pd.concat([new_history, st.session_state.db_history], ignore_index=True)
+                save_data(st.session_state.db_history, HISTORY_FILE)
+                st.toast("บันทึกประวัติเรียบร้อย!", icon="💾")
 
-            d_pdf = {
-                "my_comp": my_comp, "my_addr": my_addr, "my_tel": my_tel, "my_fax": my_fax, "my_tax": my_tax,
-                "doc_no": doc_no, "doc_date": doc_date, "due_date": due_date, "valid_days": valid_days,
-                "exp_date": exp_date, "credit": credit, "c_name": c_name, "contact": contact,
-                "c_addr": c_addr, "c_tel": c_tel, "c_fax": c_fax
-            }
-            res_pdf = create_pdf(
-                d_pdf, calc_df, 
-                {"gross": sum_gross, "discount": sum_disc, "subtotal": sum_sub, "vat": vat_val, "grand_total": grand_total},
-                {"s1": s1, "s2": s2, "s3": s3},
-                remark, has_vat
-            )
-            st.success("สร้าง PDF สำเร็จ!")
-            st.download_button("📥 คลิกเพื่อดาวน์โหลด PDF", res_pdf, f"{doc_no}.pdf", "application/pdf", use_container_width=True)
+                d_pdf = {
+                    "my_comp": my_comp, "my_addr": my_addr, "my_tel": my_tel, "my_fax": my_fax, "my_tax": my_tax,
+                    "doc_no": doc_no, "doc_date": doc_date, "due_date": due_date, "valid_days": valid_days,
+                    "exp_date": exp_date, "credit": credit, "c_name": c_name, "contact": contact,
+                    "c_addr": c_addr, "c_tel": c_tel, "c_fax": c_fax
+                }
+                res_pdf = create_pdf(
+                    d_pdf, calc_df, 
+                    {"gross": sum_gross, "discount": sum_disc, "subtotal": sum_sub, "vat": vat_val, "grand_total": grand_total},
+                    {"s1": s1, "s2": s2, "s3": s3},
+                    remark, has_vat
+                )
+                st.success("สร้าง PDF สำเร็จ!")
+                st.download_button("📥 คลิกเพื่อดาวน์โหลด PDF", res_pdf, f"{doc_no}.pdf", "application/pdf", use_container_width=True)
 
 # ------------------------------------------------------------------
 # TAB 2: ลูกค้า (FIXED: รวม Save/Delete ในปุ่มเดียว + UI สวยขึ้น)
