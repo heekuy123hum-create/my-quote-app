@@ -10,7 +10,7 @@ from fpdf import FPDF
 # ==========================================
 st.set_page_config(page_title="SIWAKIT TRADING SYSTEM", layout="wide", page_icon="🏢")
 
-# --- CSS ตกแต่ง (แบบเต็มรูปแบบ) ---
+# --- CSS ตกแต่ง (แบบเต็มรูปแบบ คงเดิมไว้) ---
 st.markdown("""
 <style>
     /* ปรับฟอนต์หลัก */
@@ -32,30 +32,15 @@ st.markdown("""
         border-color: #4CAF50;
         color: #4CAF50;
     }
-    /* กล่องยอดเงินรวม */
-    .metric-card {
-        background-color: #f8f9fa;
-        border-left: 5px solid #28a745;
-        padding: 20px;
-        border-radius: 5px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        text-align: right;
+    /* ปรับขนาดตัวเลขยอดเงินใน st.metric ให้ใหญ่และสีสวย */
+    [data-testid="stMetricValue"] {
+        font-size: 2.2rem !important;
+        font-weight: bold !important;
+        color: #28a745 !important;
     }
-    .metric-label {
-        font-size: 1.1rem;
-        color: #6c757d;
-        margin-bottom: 5px;
-    }
-    .metric-value {
-        font-size: 2.2rem;
-        font-weight: bold;
-        color: #28a745;
-    }
-    .metric-sub {
-        font-size: 0.9rem;
-        color: #555;
-        margin-top: 10px;
-        line-height: 1.6;
+    [data-testid="stMetricLabel"] {
+        font-size: 1.1rem !important;
+        color: #6c757d !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -71,9 +56,9 @@ FONT_PATH = "THSarabunNew.ttf" # ต้องมีไฟล์ฟอนต์�
 # ==========================================
 # เริ่มต้นตัวแปรตารางสินค้า
 if "grid_df" not in st.session_state:
-    # สร้างแถวเปล่า 15 บรรทัดเตรียมไว้
+    # *** แก้ไข 1: เปลี่ยนจาก 15 เป็น 20 บรรทัด ***
     st.session_state.grid_df = pd.DataFrame(
-        [{"รหัสสินค้า": "", "รายการ": "", "จำนวน": 0.0, "หน่วย": "", "ราคา": 0.0, "ส่วนลด": 0.0}] * 15
+        [{"รหัสสินค้า": "", "รายการ": "", "จำนวน": 0.0, "หน่วย": "", "ราคา": 0.0, "ส่วนลด": 0.0}] * 20
     )
 
 # กำหนดค่าเริ่มต้นให้กับ Input Fields (แก้ไขชื่อบริษัทตรงนี้)
@@ -167,10 +152,10 @@ def load_data():
 def save_data(df, filename, key_column=None):
     """บันทึก DataFrame ลงไฟล์ CSV โดยกรองแถวว่างออก"""
     
-    # 1. ตรวจสอบก่อนว่าเป็น DataFrame จริงไหม (กัน Error ที่พี่เจอ)
+    # 1. ตรวจสอบก่อนว่าเป็น DataFrame จริงไหม
     if not isinstance(df, pd.DataFrame):
         st.error(f"เกิดข้อผิดพลาด: ข้อมูลที่ส่งมาไม่ใช่ตาราง (Received {type(df)})")
-        return pd.DataFrame() # ส่งคืนค่าว่างกันโปรแกรมพัง
+        return pd.DataFrame() 
 
     # กรองเอาเฉพาะที่ไม่ได้ติ๊ก 'ลบ'
     if 'ลบ' in df.columns:
@@ -400,7 +385,6 @@ with tab1:
         col_a, col_b = st.columns(2)
         
         with col_a:
-            # *** ลบ value=... ออกเพื่อไม่ให้ชนกับ session_state และแก้ warning ***
             st.text_input("ชื่อบริษัทผู้ขาย", key="my_comp_in") 
             st.text_input("ที่อยู่บริษัท", key="my_addr_in")
             
@@ -463,6 +447,7 @@ with tab1:
     
     product_codes = st.session_state.db_products['รหัสสินค้า'].astype(str).tolist()
     
+    # *** แก้ไข 3: เพิ่ม hide_index=True เพื่อซ่อนเลขบรรทัด 0,1,2 ***
     edited_df = st.data_editor(
         st.session_state.grid_df,
         column_config={
@@ -475,6 +460,7 @@ with tab1:
         },
         num_rows="dynamic",
         use_container_width=True,
+        hide_index=True, # <--- ใส่ตรงนี้เพื่อซ่อน Index
         key="main_quotation_editor"
     )
 
@@ -525,32 +511,40 @@ with tab1:
         with sig3: st.text_input("ผู้อนุมัติ", key="s3_in")
         
     with footer_col2:
-        # Checkbox ภาษี (Logic: ติ๊ก = คิดเงิน, ไม่ติ๊ก = ไม่คิด)
+        # Checkbox ภาษี
         has_vat = st.checkbox("คำนวณภาษีมูลค่าเพิ่ม (VAT 7%)", value=True)
         
         if has_vat:
             vat_amount = sum_subtotal * 0.07
-            vat_display = f"{vat_amount:,.2f}"
-            vat_row_html = f"VAT 7%: {vat_display}<br>"
         else:
             vat_amount = 0.0
-            vat_display = "0.00"
-            vat_row_html = "" # <--- แก้ตรงนี้: ถ้าไม่ติ๊ก ให้เป็นค่าว่างไปเลย ไม่เอา d i r
             
         grand_total = sum_subtotal + vat_amount
         
-        st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-label">ยอดรวมทั้งสิ้น (Grand Total)</div>
-            <div class="metric-value">{grand_total:,.2f} บาท</div>
-            <div class="metric-sub">
-                รวมสินค้า: {sum_gross:,.2f}<br>
-                ส่วนลด: -{sum_discount:,.2f}<br>
-                ยอดก่อน VAT: {sum_subtotal:,.2f}<br>
-                {vat_row_html}
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        # *** แก้ไข 2: ใช้ Layout ปกติแทน HTML เพื่อแก้ปัญหาตัวหนังสือขยะ (dir/html error) ***
+        # แต่ยังคงความสวยงามไว้ด้วย Container Border
+        with st.container(border=True):
+            r1c1, r1c2 = st.columns([2, 1])
+            r1c1.write("รวมเงินสินค้า:")
+            r1c2.write(f"{sum_gross:,.2f}")
+            
+            r2c1, r2c2 = st.columns([2, 1])
+            r2c1.write("หักส่วนลด:")
+            r2c2.write(f"-{sum_discount:,.2f}")
+            
+            r3c1, r3c2 = st.columns([2, 1])
+            r3c1.write("ยอดก่อนภาษี:")
+            r3c2.write(f"{sum_subtotal:,.2f}")
+            
+            if has_vat:
+                r4c1, r4c2 = st.columns([2, 1])
+                r4c1.write("ภาษี VAT 7%:")
+                r4c2.write(f"{vat_amount:,.2f}")
+            
+            st.divider()
+            
+            # ใช้ st.metric เพื่อความชัวร์ 100% ว่าไม่มี Error HTML
+            st.metric(label="ยอดรวมทั้งสิ้น (Grand Total)", value=f"{grand_total:,.2f} บาท")
 
     st.markdown("###")
 
@@ -561,7 +555,8 @@ with tab1:
         if st.button("🗑️ ล้างหน้าจอ", use_container_width=True):
             for k in default_keys:
                 st.session_state[k] = ""
-            st.session_state.grid_df = pd.DataFrame([{"รหัสสินค้า": "", "รายการ": "", "จำนวน": 0.0, "หน่วย": "", "ราคา": 0.0, "ส่วนลด": 0.0}] * 15)
+            # รีเซ็ตเป็น 20 บรรทัด
+            st.session_state.grid_df = pd.DataFrame([{"รหัสสินค้า": "", "รายการ": "", "จำนวน": 0.0, "หน่วย": "", "ราคา": 0.0, "ส่วนลด": 0.0}] * 20)
             # Reset ค่า Default บริษัทกลับมาเมื่อล้างหน้าจอ
             st.session_state["my_comp_in"] = "บริษัท ศิวกิจ เทรดดิ้ง จำกัด"
             st.session_state["my_addr_in"] = "123 ถนนตัวอย่าง กทม."
@@ -624,11 +619,11 @@ with tab1:
             
             st.success("✅ บันทึกข้อมูลและสร้างไฟล์สำเร็จ!")
             
-            # 3. ปุ่ม Download PDF (ระบุ MIME Type และ File Name ชัดเจน)
+            # 3. ปุ่ม Download PDF (ระบุ .pdf ชัดเจน)
             st.download_button(
                 label="📥 ดาวน์โหลดไฟล์ PDF",
                 data=pdf_bytes,
-                file_name=f"{doc_no}.pdf",
+                file_name=f"{doc_no}.pdf", # *** แก้ไข 5: เติม .pdf ***
                 mime="application/pdf",
                 use_container_width=True
             )
@@ -650,6 +645,7 @@ with tab2:
         },
         num_rows="dynamic",
         use_container_width=True,
+        hide_index=True, # <--- ซ่อน Index
         key="customer_editor_key"
     )
     
@@ -662,7 +658,7 @@ with tab2:
         st.session_state.db_customers = saved_df
         
         st.toast("✅ บันทึกข้อมูลลูกค้าเรียบร้อย", icon="💾")
-        st.rerun()
+        st.rerun() # *** แก้ไข 4: Rerun ทันที ***
 
 # ------------------------------------------------------------------
 # TAB 3: ฐานข้อมูลสินค้า (Products)
@@ -682,6 +678,7 @@ with tab3:
         },
         num_rows="dynamic",
         use_container_width=True,
+        hide_index=True, # <--- ซ่อน Index
         key="product_editor_key"
     )
     
@@ -694,7 +691,7 @@ with tab3:
         st.session_state.db_products = saved_df
         
         st.toast("✅ บันทึกข้อมูลสินค้าเรียบร้อย", icon="💾")
-        st.rerun()
+        st.rerun() # *** แก้ไข 4: Rerun ทันที ***
 
 # ------------------------------------------------------------------
 # TAB 4: ประวัติเอกสาร (History)
@@ -758,7 +755,7 @@ with tab4:
                 "data_json": None # ซ่อนคอลัมน์ JSON ไม่ให้รก
             },
             use_container_width=True,
-            hide_index=True,
+            hide_index=True, # <--- ซ่อน Index
             key="history_editor_key"
         )
         
@@ -768,4 +765,4 @@ with tab4:
             st.session_state.db_history = saved_hist
             
             st.toast("✅ ลบประวัติที่เลือกเรียบร้อย", icon="🗑️")
-            st.rerun()
+            st.rerun() # *** แก้ไข 4: Rerun ทันที ***
