@@ -157,7 +157,7 @@ def to_num(val):
 load_data()
 
 # ==========================================
-# 3. PDF ENGINE (แก้ไขตามคำสั่ง: ฟอนต์ใหญ่ / ลายเซ็นไม่ทับ / A4)
+# 3. PDF ENGINE
 # ==========================================
 def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line):
     # ตั้งค่าหน้ากระดาษ A4 (210mm x 297mm)
@@ -187,7 +187,7 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line):
     pdf.cell(0, 8, f"{d['my_comp']}", 0, 1, 'L')
     
     pdf.set_x(45)
-    pdf.set_font(use_f, '', 14) # เนื้อหาทั่วไปปรับเป็น 14 (เดิม 12)
+    pdf.set_font(use_f, '', 14) # เนื้อหาทั่วไปปรับเป็น 14
     pdf.multi_cell(100, 6, f"{d['my_addr']}\nโทร: {d['my_tel']} แฟกซ์: {d['my_fax']}\nเลขผู้เสียภาษี: {d['my_tax']}", 0, 'L')
 
     # กล่องเลขที่เอกสาร (ขวาบน)
@@ -234,7 +234,7 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line):
         0, 'L')
 
     # --- ตารางสินค้า ---
-    # *สำคัญ* ลดจำนวนแถวลงเหลือ 15 แถว เพื่อให้ฟอนต์ใหญ่ได้และไม่ล้นหน้า A4
+    # *สำคัญ* 15 แถว เพื่อให้ฟอนต์ใหญ่ได้และไม่ล้นหน้า A4
     MAX_ROWS = 15 
     pdf.set_y(95)
     
@@ -251,7 +251,7 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line):
 
     # Loop แสดงรายการ
     pdf.set_font(use_f, '', 13) # เนื้อหาในตารางใหญ่ขึ้น (13pt)
-    row_height = 8 # เพิ่มความสูงบรรทัด (จาก 7 เป็น 8)
+    row_height = 8 # ความสูงบรรทัดสินค้า
     
     valid_items = items_df[items_df['รายการ'].str.strip() != ""].copy()
     
@@ -283,18 +283,18 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line):
             pdf.cell(cols_w[j], row_height, txt, 1, 0, align)
         pdf.ln()
 
-    # --- สรุปยอดเงิน ---
+    # --- สรุปยอดเงิน (แก้ไข: บีบระยะบรรทัดให้ชิดกัน) ---
     pdf.ln(5)
     current_y = pdf.get_y()
     
-    # หมายเหตุ (ซ้าย) - เพิ่มฟอนต์
+    # หมายเหตุ (ซ้าย) - ลดระยะห่างบรรทัดลงเหลือ 5
     pdf.set_xy(15, current_y)
     pdf.set_font(use_f, 'B', 14)
     pdf.cell(0, 7, "หมายเหตุ / Remarks:", 0, 1)
     pdf.set_font(use_f, '', 13)
-    pdf.multi_cell(100, 6, remark_text, 0, 'L')
+    pdf.multi_cell(100, 5, remark_text, 0, 'L') # <-- แก้ไข: ลด line-height เหลือ 5
     
-    # ตัวเลข (ขวา) - เพิ่มฟอนต์
+    # ตัวเลข (ขวา) - บีบให้ชิดกัน
     sum_x_label = 135
     sum_x_val = 175
     sum_y = current_y
@@ -302,11 +302,11 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line):
     def print_sum_row(label, value, bold=False, line=False):
         nonlocal sum_y
         pdf.set_xy(sum_x_label, sum_y)
-        pdf.set_font(use_f, 'B' if bold else '', 13) # ฟอนต์สรุปยอด 13
-        pdf.cell(40, 7, label, 0, 0, 'R')
+        pdf.set_font(use_f, 'B' if bold else '', 13)
+        pdf.cell(40, 6, label, 0, 0, 'R') # <-- แก้ไข: ลดความสูงช่องเหลือ 6
         pdf.set_xy(sum_x_val, sum_y)
-        pdf.cell(25, 7, f"{value:,.2f}", 'B' if line else 0, 1, 'R')
-        sum_y += 7
+        pdf.cell(25, 6, f"{value:,.2f}", 'B' if line else 0, 1, 'R') # <-- แก้ไข: ลดความสูงช่องเหลือ 6
+        sum_y += 6 # <-- แก้ไข: เพิ่มระยะทีละ 6 พอ (เดิม 7)
 
     print_sum_row("รวมเงินสินค้า:", summary['gross'])
     print_sum_row("หักส่วนลด:", summary['discount'])
@@ -317,11 +317,10 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line):
         
     print_sum_row("ยอดรวมทั้งสิ้น:", summary['grand_total'], True, True)
 
-    # --- ลายเซ็น (แก้ไข: ย้ายลงล่างสุด แบบ Absolute Position) ---
-    # ใช้ -50 เพื่อดันลงไปที่ก้นกระดาษ A4 เสมอ ไม่ว่าจะเนื้อหาเยอะหรือน้อย
-    # และรับประกันว่าไม่ทับ เพราะเราลดจำนวนบรรทัดตารางลงแล้ว
-    pdf.set_y(-40) 
-    pdf.set_font(use_f, '', 13) # ฟอนต์ลายเซ็น 13
+    # --- ลายเซ็น (แก้ไข: ย้ายลงล่างสุด ล่างสุดของหน้ากระดาษ) ---
+    # ใช้ -35 เพื่อดันลงไปเกือบชิดขอบกระดาษ (ล่างสุดเท่าที่จะเป็นไปได้โดยไม่ตกขอบ)
+    pdf.set_y(-25) 
+    pdf.set_font(use_f, '', 13)
     
     sig_labels = ["ผู้สั่งซื้อสินค้า", "พนักงานขาย", "ผู้อนุมัติ"]
     names = [sigs['s1'], sigs['s2'], sigs['s3']]
@@ -659,4 +658,3 @@ with tab4:
             st.rerun()
     else:
         st.info("ยังไม่มีประวัติ")
-
