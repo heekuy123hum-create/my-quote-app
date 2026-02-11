@@ -10,7 +10,7 @@ from fpdf import FPDF
 # ==========================================
 st.set_page_config(page_title="SIWAKIT TRADING SYSTEM", layout="wide", page_icon="🏢")
 
-# --- CSS ตกแต่ง (คงเดิมแต่จัดเต็ม) ---
+# --- CSS ตกแต่ง (แบบเต็มรูปแบบ) ---
 st.markdown("""
 <style>
     /* ปรับฟอนต์หลัก */
@@ -55,6 +55,7 @@ st.markdown("""
         font-size: 0.9rem;
         color: #555;
         margin-top: 10px;
+        line-height: 1.6;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -63,7 +64,7 @@ st.markdown("""
 CUST_FILE = "database_customers.csv"
 PROD_FILE = "database_products.csv"
 HISTORY_FILE = "history_quotes.csv"
-FONT_PATH = "THSarabunNew.ttf" # ⚠️ ต้องมีไฟล์นี้
+FONT_PATH = "THSarabunNew.ttf" # ต้องมีไฟล์ฟอนต์นี้ในโฟลเดอร์เดียวกัน
 
 # ==========================================
 # 2. จัดการ SESSION STATE (ตัวแปรระบบ)
@@ -89,8 +90,9 @@ for key in default_keys:
 # 3. ฟังก์ชันจัดการฐานข้อมูล (DATABASE)
 # ==========================================
 def load_data():
-    """โหลดข้อมูลจากไฟล์ CSV เข้าสู่ Session State"""
-    # 1. โหลดข้อมูลลูกค้า
+    """โหลดข้อมูลจากไฟล์ CSV เข้าสู่ Session State พร้อมสร้างตัวอย่างถ้าไฟล์ว่าง"""
+    
+    # --- 1. โหลดข้อมูลลูกค้า ---
     if "db_customers" not in st.session_state:
         if os.path.exists(CUST_FILE):
             try:
@@ -98,16 +100,24 @@ def load_data():
                 if 'Unnamed: 0' in df.columns: df = df.drop(columns=['Unnamed: 0'])
                 st.session_state.db_customers = df
             except:
-                st.session_state.db_customers = pd.DataFrame(columns=["ลบ", "รหัส", "ชื่อบริษัท", "ผู้ติดต่อ", "ที่อยู่", "โทร", "แฟกซ์"])
+                st.session_state.db_customers = pd.DataFrame()
         else:
-            st.session_state.db_customers = pd.DataFrame(columns=["ลบ", "รหัส", "ชื่อบริษัท", "ผู้ติดต่อ", "ที่อยู่", "โทร", "แฟกซ์"])
+            st.session_state.db_customers = pd.DataFrame()
+
+    # *** สร้างตัวอย่างข้อมูลลูกค้า (ถ้าตารางว่าง) ***
+    if st.session_state.db_customers.empty:
+        demo_customers = [
+            {"ลบ": False, "รหัส": "C001", "ชื่อบริษัท": "ลูกค้าทั่วไป (เงินสด)", "ผู้ติดต่อ": "-", "ที่อยู่": "-", "โทร": "-", "แฟกซ์": "-"},
+            {"ลบ": False, "รหัส": "C002", "ชื่อบริษัท": "บริษัท ตัวอย่าง จำกัด", "ผู้ติดต่อ": "คุณสมชาย", "ที่อยู่": "123 ถ.สุขุมวิท กทม.", "โทร": "02-999-9999", "แฟกซ์": "02-999-9998"}
+        ]
+        st.session_state.db_customers = pd.DataFrame(demo_customers)
     
     # ตรวจสอบคอลัมน์ 'ลบ'
     if 'ลบ' not in st.session_state.db_customers.columns:
         st.session_state.db_customers.insert(0, 'ลบ', False)
     st.session_state.db_customers['ลบ'] = st.session_state.db_customers['ลบ'].fillna(False).astype(bool)
 
-    # 2. โหลดข้อมูลสินค้า
+    # --- 2. โหลดข้อมูลสินค้า ---
     if "db_products" not in st.session_state:
         if os.path.exists(PROD_FILE):
             try:
@@ -117,15 +127,24 @@ def load_data():
                 if 'Unnamed: 0' in df.columns: df = df.drop(columns=['Unnamed: 0'])
                 st.session_state.db_products = df
             except:
-                st.session_state.db_products = pd.DataFrame(columns=["ลบ", "รหัสสินค้า", "รายการ", "ราคา", "หน่วย"])
+                st.session_state.db_products = pd.DataFrame()
         else:
-            st.session_state.db_products = pd.DataFrame(columns=["ลบ", "รหัสสินค้า", "รายการ", "ราคา", "หน่วย"])
+            st.session_state.db_products = pd.DataFrame()
+
+    # *** สร้างตัวอย่างข้อมูลสินค้า (ถ้าตารางว่าง) ***
+    if st.session_state.db_products.empty:
+        demo_products = [
+            {"ลบ": False, "รหัสสินค้า": "P001", "รายการ": "สินค้าตัวอย่าง A", "ราคา": 1500.00, "หน่วย": "ชิ้น"},
+            {"ลบ": False, "รหัสสินค้า": "P002", "รายการ": "ค่าบริการติดตั้ง", "ราคา": 500.00, "หน่วย": "งาน"},
+            {"ลบ": False, "รหัสสินค้า": "P003", "รายการ": "สายไฟ VAF 2x2.5", "ราคา": 1250.00, "หน่วย": "ม้วน"}
+        ]
+        st.session_state.db_products = pd.DataFrame(demo_products)
 
     if 'ลบ' not in st.session_state.db_products.columns:
         st.session_state.db_products.insert(0, 'ลบ', False)
     st.session_state.db_products['ลบ'] = st.session_state.db_products['ลบ'].fillna(False).astype(bool)
 
-    # 3. โหลดประวัติ
+    # --- 3. โหลดประวัติ ---
     if "db_history" not in st.session_state:
         if os.path.exists(HISTORY_FILE):
             try:
@@ -140,13 +159,18 @@ def load_data():
 
 def save_data(df, filename, key_column=None):
     """บันทึก DataFrame ลงไฟล์ CSV โดยกรองแถวว่างออก"""
-    df_to_save = df.copy()
+    # กรองเอาเฉพาะที่ไม่ได้ติ๊ก 'ลบ'
+    if 'ลบ' in df.columns:
+        df_to_save = df[df['ลบ'] == False].copy()
+    else:
+        df_to_save = df.copy()
     
-    # กรองข้อมูลว่างทิ้ง เพื่อไม่ให้ไฟล์บวม
+    # กรองข้อมูลว่างทิ้ง (ถ้ามี key_column)
     if key_column and key_column in df_to_save.columns:
         df_to_save = df_to_save[df_to_save[key_column].astype(str).str.strip() != ""]
         
     df_to_save.to_csv(filename, index=False, encoding='utf-8-sig')
+    return df_to_save
 
 def to_num(val):
     """แปลงค่าเป็นตัวเลข ป้องกัน Error"""
@@ -173,17 +197,14 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line):
     # --- จัดการฟอนต์ไทย ---
     if os.path.exists(FONT_PATH):
         try:
-            # ลองเพิ่มฟอนต์แบบปกติ (สำหรับ fpdf เวอร์ชั่นทั่วไป)
             pdf.add_font('THSarabun', '', FONT_PATH, uni=True)
             pdf.add_font('THSarabun', 'B', FONT_PATH, uni=True)
             font_name = 'THSarabun'
         except:
-            # Fallback (ถ้า library เวอร์ชั่นเก่า)
             pdf.add_font('THSarabun', '', FONT_PATH)
             pdf.add_font('THSarabun', 'B', FONT_PATH)
             font_name = 'THSarabun'
     else:
-        # กรณีไม่มีฟอนต์เลย
         font_name = 'Arial' 
     
     # --- 1. ส่วนหัว (Header) ---
@@ -249,7 +270,7 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line):
     pdf.set_y(85)
     
     # หัวตาราง
-    cols_w = [12, 78, 15, 15, 25, 15, 25] # รวม 185 (A4 กว้าง 210 - margin 30)
+    cols_w = [12, 78, 15, 15, 25, 15, 25] # รวม 185
     headers = ["ลำดับ", "รายการสินค้า", "จำนวน", "หน่วย", "ราคา/หน่วย", "ส่วนลด", "จำนวนเงิน"]
     
     pdf.set_fill_color(240, 240, 240)
@@ -303,7 +324,6 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line):
     pdf.multi_cell(110, 5, remark_text, 0, 'L')
     
     # ยอดรวม (ขวา)
-    # ตั้งค่าตำแหน่งเริ่มต้นของกล่องสรุป
     sum_x_label = 135
     sum_x_val = 175
     sum_y = current_y
@@ -322,20 +342,20 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line):
     print_sum_row("หักส่วนลด:", summary['discount'])
     print_sum_row("ยอดหลังหักส่วนลด:", summary['subtotal'])
     
+    # *** Logic แสดง/ซ่อน บรรทัด VAT ตามคำสั่ง ***
     if show_vat_line:
         print_sum_row("ภาษีมูลค่าเพิ่ม 7%:", summary['vat'])
         
     print_sum_row("ยอดรวมทั้งสิ้น:", summary['grand_total'], True, True)
 
     # --- 5. ลายเซ็น ---
-    # ไปที่ด้านล่างสุดของหน้า
     pdf.set_y(-45)
     pdf.set_font(font_name, '', 11)
     
     sig_labels = ["ผู้สั่งซื้อสินค้า", "พนักงานขาย", "ผู้อนุมัติ"]
     names = [sigs['s1'], sigs['s2'], sigs['s3']]
     
-    x_positions = [20, 85, 150] # ตำแหน่งแกน X ของ 3 คน
+    x_positions = [20, 85, 150]
     y_sig = pdf.get_y()
     
     for i in range(3):
@@ -367,7 +387,8 @@ with tab1:
         col_a, col_b = st.columns(2)
         
         with col_a:
-            st.text_input("ชื่อบริษัทผู้ขาย", "บริษัท ตัวอย่าง จำกัด", key="my_comp_in")
+            # *** Fix ชื่อบริษัทตามสั่ง ***
+            st.text_input("ชื่อบริษัทผู้ขาย", "บริษัท ศิวกิจ เทรดดิ้ง จำกัด", key="my_comp_in")
             st.text_input("ที่อยู่บริษัท", "123 ถนนตัวอย่าง กทม.", key="my_addr_in")
             
             c1, c2, c3 = st.columns(3)
@@ -376,11 +397,10 @@ with tab1:
             with c3: st.text_input("เลขผู้เสียภาษี", key="my_tax_in")
             
         with col_b:
-            # ใช้ f-string สร้างเลขที่เอกสารอัตโนมัติ
+            # Auto-gen doc number
             auto_doc = f"QT-{datetime.now().strftime('%Y%m%d')}-001"
             st.text_input("เลขที่ใบเสนอราคา", value=auto_doc, key="doc_no_in")
             
-            # ใช้ Date Input เพื่อความแม่นยำ
             st.date_input("วันที่ออกเอกสาร", date.today(), key="doc_date_in")
             
             st.text_input("กำหนดส่งของ", "ภายใน 7-15 วัน", key="due_date_in")
@@ -400,10 +420,8 @@ with tab1:
         cust_options = ["-- พิมพ์เอง --"] + st.session_state.db_customers['ชื่อบริษัท'].dropna().tolist()
         
         def on_cust_select():
-            """Callback เมื่อเลือกลูกค้า ให้เติมคำลงช่องว่าง"""
             selected = st.session_state.cust_selector_tab1
             if selected and selected != "-- พิมพ์เอง --":
-                # หาข้อมูลใน DB
                 found = st.session_state.db_customers[st.session_state.db_customers['ชื่อบริษัท'] == selected]
                 if not found.empty:
                     row = found.iloc[0]
@@ -430,10 +448,8 @@ with tab1:
     # --- ส่วนที่ 3: ตารางสินค้า (Grid) ---
     st.subheader("📦 รายการสินค้า")
     
-    # ดึงรหัสสินค้ามาทำ Dropdown ในตาราง
     product_codes = st.session_state.db_products['รหัสสินค้า'].astype(str).tolist()
     
-    # แสดงตารางแบบแก้ไขได้ (Data Editor)
     edited_df = st.data_editor(
         st.session_state.grid_df,
         column_config={
@@ -444,20 +460,18 @@ with tab1:
             "ราคา": st.column_config.NumberColumn("ราคา/หน่วย", min_value=0.0, format="%.2f"),
             "ส่วนลด": st.column_config.NumberColumn("ส่วนลด (บาท)", min_value=0.0, format="%.2f")
         },
-        num_rows="dynamic", # เพิ่มลบแถวได้
+        num_rows="dynamic",
         use_container_width=True,
         key="main_quotation_editor"
     )
 
-    # --- Logic Auto-Fill สินค้า (เมื่อเลือกรหัสสินค้า ให้เติมชื่อและราคา) ---
+    # Auto-Fill Logic
     needs_rerun = False
     for idx, row in edited_df.iterrows():
         code = str(row['รหัสสินค้า'])
-        # ถ้ามีรหัสสินค้า และยังไม่มีชื่อรายการ (หรือชื่อรายการไม่ตรงกับ DB)
         if code and code in product_codes:
             prod_info = st.session_state.db_products[st.session_state.db_products['รหัสสินค้า'] == code].iloc[0]
             
-            # ตรวจสอบว่าต้องอัปเดตหรือไม่ (ป้องกัน Loop)
             if str(row['รายการ']) == "" or str(row['รายการ']) != prod_info['รายการ']:
                 edited_df.at[idx, 'รายการ'] = prod_info['รายการ']
                 edited_df.at[idx, 'ราคา'] = float(prod_info['ราคา'])
@@ -470,8 +484,7 @@ with tab1:
     else:
         st.session_state.grid_df = edited_df
 
-    # --- ส่วนที่ 4: การคำนวณเงิน (Real-time Calculation) ---
-    # สร้าง Dataframe สำหรับคำนวณแยกออกมา เพื่อไม่ให้กระทบตารางหลัก
+    # --- ส่วนที่ 4: การคำนวณเงิน ---
     calc_df = edited_df.copy()
     calc_df['q'] = calc_df['จำนวน'].apply(to_num)
     calc_df['p'] = calc_df['ราคา'].apply(to_num)
@@ -499,13 +512,20 @@ with tab1:
         with sig3: st.text_input("ผู้อนุมัติ", key="s3_in")
         
     with footer_col2:
-        # Checkbox ภาษี
+        # Checkbox ภาษี (Logic: ติ๊ก = คิดเงิน, ไม่ติ๊ก = ไม่คิด)
         has_vat = st.checkbox("คำนวณภาษีมูลค่าเพิ่ม (VAT 7%)", value=True)
         
-        vat_amount = sum_subtotal * 0.07 if has_vat else 0.0
+        if has_vat:
+            vat_amount = sum_subtotal * 0.07
+            vat_display = f"{vat_amount:,.2f}"
+            vat_row_html = f"VAT 7%: {vat_display}<br>"
+        else:
+            vat_amount = 0.0
+            vat_display = "0.00"
+            vat_row_html = "" # ซ่อนบรรทัดนี้ไปเลยถ้าไม่ติ๊ก
+            
         grand_total = sum_subtotal + vat_amount
         
-        # แสดงผลลัพธ์แบบ Card สวยงาม
         st.markdown(f"""
         <div class="metric-card">
             <div class="metric-label">ยอดรวมทั้งสิ้น (Grand Total)</div>
@@ -514,19 +534,18 @@ with tab1:
                 รวมสินค้า: {sum_gross:,.2f}<br>
                 ส่วนลด: -{sum_discount:,.2f}<br>
                 ยอดก่อน VAT: {sum_subtotal:,.2f}<br>
-                VAT 7%: {vat_amount:,.2f}
+                {vat_row_html}
             </div>
         </div>
         """, unsafe_allow_html=True)
 
-    st.markdown("###") # เว้นบรรทัด
+    st.markdown("###")
 
-    # --- ปุ่มดำเนินการ (Action Buttons) ---
+    # --- ปุ่มดำเนินการ ---
     act_col1, act_col2, act_col3 = st.columns([1, 2, 2])
     
     with act_col1:
         if st.button("🗑️ ล้างหน้าจอ", use_container_width=True):
-            # Reset ค่าทั้งหมด
             for k in default_keys:
                 st.session_state[k] = ""
             st.session_state.grid_df = pd.DataFrame([{"รหัสสินค้า": "", "รายการ": "", "จำนวน": 0.0, "หน่วย": "", "ราคา": 0.0, "ส่วนลด": 0.0}] * 15)
@@ -534,12 +553,11 @@ with tab1:
 
     with act_col3:
         if st.button("💾 บันทึกและพิมพ์ PDF", type="primary", use_container_width=True):
-            # 1. ตรวจสอบเลขที่เอกสารซ้ำ
+            # 1. บันทึกประวัติ
             doc_no = st.session_state.doc_no_in
             if not st.session_state.db_history.empty and doc_no in st.session_state.db_history['doc_no'].values:
                 st.warning(f"⚠️ เลขที่ {doc_no} มีอยู่ในระบบแล้ว จะเป็นการบันทึกซ้ำ")
             
-            # 2. เตรียมข้อมูลบันทึกประวัติ (JSON)
             history_json = {
                 "grid_df": edited_df.to_dict(),
                 "c_name": st.session_state.c_name_in,
@@ -547,7 +565,7 @@ with tab1:
                 "c_addr": st.session_state.c_addr_in,
                 "c_tel": st.session_state.c_tel_in,
                 "remark": st.session_state.remark_in,
-                "doc_date_str": str(st.session_state.doc_date_in), # เก็บเป็น String
+                "doc_date_str": str(st.session_state.doc_date_in),
                 "grand_total": grand_total
             }
             
@@ -560,12 +578,11 @@ with tab1:
                 "data_json": json.dumps(history_json, ensure_ascii=False)
             }
             
-            # บันทึกลง DataFrame และ CSV
             record_df = pd.DataFrame([new_record])
             st.session_state.db_history = pd.concat([record_df, st.session_state.db_history], ignore_index=True)
             save_data(st.session_state.db_history, HISTORY_FILE)
             
-            # 3. สร้าง PDF
+            # 2. สร้าง PDF
             pdf_info = {
                 "my_comp": st.session_state.my_comp_in, "my_addr": st.session_state.my_addr_in,
                 "my_tel": st.session_state.my_tel_in, "my_fax": st.session_state.my_fax_in, "my_tax": st.session_state.my_tax_in,
@@ -573,7 +590,6 @@ with tab1:
                 "due_date": st.session_state.due_date_in,
                 "valid_days": st.session_state.valid_days_in,
                 "credit": st.session_state.credit_in,
-                # คำนวณวันหมดอายุอัตโนมัติ
                 "exp_date": (st.session_state.doc_date_in + timedelta(days=int(st.session_state.valid_days_in))).strftime("%d/%m/%Y"),
                 "c_name": st.session_state.c_name_in, "contact": st.session_state.contact_in,
                 "c_addr": st.session_state.c_addr_in, "c_tel": st.session_state.c_tel_in, "c_fax": st.session_state.c_fax_in
@@ -588,10 +604,11 @@ with tab1:
                 "s1": st.session_state.s1_in, "s2": st.session_state.s2_in, "s3": st.session_state.s3_in
             }
             
-            # เรียกฟังก์ชัน PDF
             pdf_bytes = create_pdf(pdf_info, calc_df, summary_info, sigs_info, st.session_state.remark_in, has_vat)
             
             st.success("✅ บันทึกข้อมูลและสร้างไฟล์สำเร็จ!")
+            
+            # 3. ปุ่ม Download PDF (ระบุ MIME Type และ File Name ชัดเจน)
             st.download_button(
                 label="📥 ดาวน์โหลดไฟล์ PDF",
                 data=pdf_bytes,
@@ -605,10 +622,10 @@ with tab1:
 # ------------------------------------------------------------------
 with tab2:
     st.header("👥 จัดการฐานข้อมูลลูกค้า")
-    st.info("💡 วิธีลบ: ติ๊กช่อง 'ลบ' หน้าชื่อที่ต้องการ แล้วกดปุ่มบันทึกสีแดงด้านล่าง")
+    st.info("💡 แก้ไขข้อมูลในตารางแล้วกดปุ่มบันทึกสีแดงด้านล่าง (กดครั้งเดียวเซฟทันที)")
     
-    # Editor
-    edited_customers = st.data_editor(
+    # กำหนด key ให้ data_editor เพื่อดึงค่า session_state ได้โดยตรง
+    st.data_editor(
         st.session_state.db_customers,
         column_config={
             "ลบ": st.column_config.CheckboxColumn("ลบรายการ", default=False, width="small"),
@@ -617,20 +634,19 @@ with tab2:
         },
         num_rows="dynamic",
         use_container_width=True,
-        key="customer_editor"
+        key="customer_editor_key" # Key สำคัญ
     )
     
-    # ปุ่มบันทึก (จัดการการลบและบันทึกในปุ่มเดียว)
+    # ปุ่มบันทึกแบบ One-Click Action
     if st.button("💾 บันทึกการเปลี่ยนแปลง (ลูกค้า)", type="primary"):
-        # 1. กรองเอาเฉพาะแถวที่ไม่ได้ติ๊ก 'ลบ'
-        active_customers = edited_customers[edited_customers['ลบ'] == False].copy()
+        # 1. ดึงข้อมูลล่าสุดจาก Editor State โดยตรง
+        latest_df = st.session_state["customer_editor_key"]
         
-        # 2. Reset Index ให้เรียงใหม่
-        active_customers = active_customers.reset_index(drop=True)
+        # 2. Save ลงไฟล์ (ฟังก์ชัน save_data จะกรองตัวที่ลบออกให้เอง)
+        saved_df = save_data(latest_df, CUST_FILE, key_column="ชื่อบริษัท")
         
-        # 3. อัปเดต State และ Save ลงไฟล์
-        st.session_state.db_customers = active_customers
-        save_data(active_customers, CUST_FILE, key_column="ชื่อบริษัท")
+        # 3. อัปเดตกลับเข้าตัวแปรหลัก
+        st.session_state.db_customers = saved_df
         
         st.toast("✅ บันทึกข้อมูลลูกค้าเรียบร้อย", icon="💾")
         st.rerun()
@@ -640,10 +656,10 @@ with tab2:
 # ------------------------------------------------------------------
 with tab3:
     st.header("📦 จัดการฐานข้อมูลสินค้า")
-    st.info("💡 วิธีลบ: ติ๊กช่อง 'ลบ' หน้าสินค้าที่ต้องการ แล้วกดปุ่มบันทึกสีแดงด้านล่าง")
+    st.info("💡 แก้ไขข้อมูลในตารางแล้วกดปุ่มบันทึกสีแดงด้านล่าง (กดครั้งเดียวเซฟทันที)")
     
-    # Editor
-    edited_products = st.data_editor(
+    # กำหนด key ให้ data_editor
+    st.data_editor(
         st.session_state.db_products,
         column_config={
             "ลบ": st.column_config.CheckboxColumn("ลบรายการ", default=False, width="small"),
@@ -653,20 +669,19 @@ with tab3:
         },
         num_rows="dynamic",
         use_container_width=True,
-        key="product_editor"
+        key="product_editor_key" # Key สำคัญ
     )
     
-    # ปุ่มบันทึก (Logic เดียวกับลูกค้า)
+    # ปุ่มบันทึกแบบ One-Click Action
     if st.button("💾 บันทึกการเปลี่ยนแปลง (สินค้า)", type="primary"):
-        # 1. กรองเอาเฉพาะแถวที่ไม่ได้ติ๊ก 'ลบ'
-        active_products = edited_products[edited_products['ลบ'] == False].copy()
+        # 1. ดึงข้อมูลล่าสุดจาก Editor State
+        latest_df = st.session_state["product_editor_key"]
         
-        # 2. Reset Index
-        active_products = active_products.reset_index(drop=True)
+        # 2. Save ลงไฟล์
+        saved_df = save_data(latest_df, PROD_FILE, key_column="รหัสสินค้า")
         
-        # 3. อัปเดต State และ Save
-        st.session_state.db_products = active_products
-        save_data(active_products, PROD_FILE, key_column="รหัสสินค้า")
+        # 3. อัปเดตกลับเข้าตัวแปรหลัก
+        st.session_state.db_products = saved_df
         
         st.toast("✅ บันทึกข้อมูลสินค้าเรียบร้อย", icon="💾")
         st.rerun()
@@ -734,16 +749,16 @@ with tab4:
             },
             use_container_width=True,
             hide_index=True,
-            key="history_editor"
+            key="history_editor_key"
         )
         
         if st.button("💾 อัปเดตประวัติ (ลบรายการที่เลือก)", type="primary"):
-             # Logic การลบเหมือน Tab อื่น
-            active_history = edited_history[edited_history['ลบ'] == False].copy()
-            active_history = active_history.reset_index(drop=True)
+            # ดึงข้อมูลจาก Editor State
+            latest_hist = st.session_state["history_editor_key"]
             
-            st.session_state.db_history = active_history
-            save_data(active_history, HISTORY_FILE)
+            # Save
+            saved_hist = save_data(latest_hist, HISTORY_FILE)
+            st.session_state.db_history = saved_hist
             
             st.toast("✅ ลบประวัติที่เลือกเรียบร้อย", icon="🗑️")
             st.rerun()
