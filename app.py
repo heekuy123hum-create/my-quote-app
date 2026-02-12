@@ -4,29 +4,33 @@ from datetime import datetime, date, timedelta
 import os
 import json
 from fpdf import FPDF
+import requests
+from streamlit_lottie import st_lottie
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.base import MIMEBase
+from email import encoders
 
 # ==========================================
-# 1. DATABASE SYSTEM & CONFIGURATION
+# 1. SYSTEM CONFIG & ASSETS
 # ==========================================
 st.set_page_config(page_title="SIWAKIT TRADING SYSTEM", layout="wide", page_icon="🏢")
 
 # --- CSS ตกแต่ง UI ---
 st.markdown("""
 <style>
-    /* ปรับฟอนต์ให้ดูทันสมัย */
     html, body, [class*="css"] {
         font-family: 'Sarabun', sans-serif;
     }
     h1, h2, h3 {
         color: #2c3e50;
     }
-    /* ปรับแต่งปุ่มกด */
     .stButton>button {
         border-radius: 8px;
         height: 3em;
         font-weight: bold;
     }
-    /* กล่องยอดเงินรวม */
     .metric-card {
         background-color: #d4edda;
         border: 1px solid #c3e6cb;
@@ -48,12 +52,23 @@ st.markdown("""
         color: #28a745;
         text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
     }
-    /* ซ่อน VAT ถ้าไม่ได้เลือก */
     .vat-hidden {
         display: none;
     }
 </style>
 """, unsafe_allow_html=True)
+
+# --- Lottie Animation Loader ---
+def load_lottieurl(url: str):
+    r = requests.get(url)
+    if r.status_code != 200:
+        return None
+    return r.json()
+
+# โหลด Animation (ตัวอย่าง: Animation เอกสาร และ จรวด)
+lottie_office = load_lottieurl("https://lottie.host/5a8b7928-8924-4069-950c-1123533866b1/0XgV0lK1uF.json")
+lottie_success = load_lottieurl("https://assets9.lottiefiles.com/packages/lf20_ttv8K8.json")
+lottie_email = load_lottieurl("https://lottie.host/9f6d6344-933e-4091-897b-3b3644026369/123456.json") # Placeholder URL
 
 # ชื่อไฟล์สำหรับเก็บข้อมูล
 CUST_FILE = "database_customers.csv"
@@ -63,13 +78,45 @@ FONT_PATH = "THSarabunNew.ttf"
 
 # เริ่มต้นตัวแปร Session State
 if "grid_df" not in st.session_state:
-    # เริ่มต้น 15 บรรทัดเพื่อให้พอดีกับหน้า A4 ที่ฟอนต์ใหญ่ขึ้น
     st.session_state.grid_df = pd.DataFrame(
         [{"รหัสสินค้า": "", "รายการ": "", "จำนวน": 0.0, "หน่วย": "", "ราคา": 0.0, "ส่วนลด": 0.0}] * 15
     )
+if "generated_pdf_bytes" not in st.session_state:
+    st.session_state.generated_pdf_bytes = None
+if "last_doc_no" not in st.session_state:
+    st.session_state.last_doc_no = ""
 
 # ==========================================
-# 2. ฟังก์ชันจัดการข้อมูล (LOAD & SAVE)
+# 2. EMAIL SYSTEM FUNCTION
+# ==========================================
+def send_email_with_attachment(sender_email, sender_password, receiver_email, subject, body, file_bytes, filename):
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = sender_email
+        msg['To'] = receiver_email
+        msg['Subject'] = subject
+        msg.attach(MIMEText(body, 'plain'))
+
+        # Attach PDF
+        part = MIMEBase('application', 'octet-stream')
+        part.set_payload(file_bytes)
+        encoders.encode_base64(part)
+        part.add_header('Content-Disposition', f"attachment; filename= {filename}")
+        msg.attach(part)
+
+        # SMTP Server (Default Gmail)
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        server.login(sender_email, sender_password)
+        text = msg.as_string()
+        server.sendmail(sender_email, receiver_email, text)
+        server.quit()
+        return True, "ส่งอีเมลสำเร็จ!"
+    except Exception as e:
+        return False, f"เกิดข้อผิดพลาด: {str(e)}"
+
+# ==========================================
+# 3. DATABASE MANAGEMENT (LOAD & SAVE)
 # ==========================================
 def load_data():
     # --- 1. โหลดข้อมูลลูกค้า ---
@@ -125,25 +172,15 @@ def load_data():
             st.session_state.db_history = pd.DataFrame(columns=["ลบ", "timestamp", "doc_no", "customer", "total", "data_json"])
 
 def save_data(df, filename, key_col=None):
-    """ฟังก์ชันบันทึก Dataframe ลง CSV แบบคลีนๆ"""
     df_to_save = df.copy()
-    
     if 'ลบ' in df_to_save.columns:
-        # กรองเอาเฉพาะที่ไม่ได้ติ๊กลบ
         df_to_save = df_to_save[df_to_save['ลบ'] == False]
-        # แล้วเอาคอลัมน์ 'ลบ' ออกก่อนบันทึก
         df_to_save['ลบ'] = False
-
-    # กรองแถวว่าง (ถ้ามี key_col)
     if key_col and key_col in df_to_save.columns:
          df_to_save = df_to_save[df_to_save[key_col].astype(str).str.strip() != ""]
-
     if 'Unnamed: 0' in df_to_save.columns:
         df_to_save = df_to_save.drop(columns=['Unnamed: 0'])
-    
-    # Reset Index เพื่อไม่ให้มีเลข 0,1,2 ติดไป
     df_to_save = df_to_save.reset_index(drop=True)
-    
     df_to_save.to_csv(filename, index=False, encoding='utf-8-sig')
     return df_to_save
 
@@ -157,16 +194,14 @@ def to_num(val):
 load_data()
 
 # ==========================================
-# 3. PDF ENGINE
+# 4. PDF ENGINE (ระบบเดิม)
 # ==========================================
 def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line):
-    # ตั้งค่าหน้ากระดาษ A4 (210mm x 297mm)
     pdf = FPDF(unit='mm', format='A4')
-    pdf.set_margins(15, 15, 15) # ขอบซ้ายขวา 15mm
+    pdf.set_margins(15, 15, 15)
     pdf.set_auto_page_break(auto=False)
     pdf.add_page()
     
-    # จัดการฟอนต์
     if os.path.exists(FONT_PATH):
         pdf.add_font('THSarabun', '', FONT_PATH, uni=True)
         pdf.add_font('THSarabun', 'B', FONT_PATH, uni=True)
@@ -174,41 +209,38 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line):
     else:
         use_f = 'Arial'
 
-    # --- ส่วนหัว (Header) ---
-    # โลโก้
+    # Header
     for ext in ['png', 'jpg', 'jpeg']:
         if os.path.exists(f"logo.{ext}"):
             pdf.image(f"logo.{ext}", x=15, y=10, w=25)
             break
             
-    # บริษัทเรา (เพิ่มขนาดตัวอักษร)
     pdf.set_xy(45, 10)
-    pdf.set_font(use_f, 'B', 18) # หัวข้อใหญ่
+    pdf.set_font(use_f, 'B', 18)
     pdf.cell(0, 8, f"{d['my_comp']}", 0, 1, 'L')
     
     pdf.set_x(45)
-    pdf.set_font(use_f, '', 14) # เนื้อหาทั่วไปปรับเป็น 14
+    pdf.set_font(use_f, '', 14)
     pdf.multi_cell(100, 6, f"{d['my_addr']}\nโทร: {d['my_tel']} แฟกซ์: {d['my_fax']}\nเลขผู้เสียภาษี: {d['my_tax']}", 0, 'L')
 
-    # กล่องเลขที่เอกสาร (ขวาบน)
+    # Doc No Box
     pdf.set_xy(140, 10)
     pdf.set_font(use_f, 'B', 14)
-    pdf.cell(55, 20, "", 1, 0) # กรอบ
+    pdf.cell(55, 20, "", 1, 0)
     pdf.set_xy(142, 13)
     pdf.cell(50, 6, f"เลขที่: {d['doc_no']}", 0, 1, 'L')
     pdf.set_x(142)
     pdf.cell(50, 6, f"วันที่: {d['doc_date']}", 0, 1, 'L')
 
-    # ชื่อเอกสาร (Title)
+    # Title
     pdf.set_y(45)
     pdf.set_font(use_f, 'B', 26)
     pdf.cell(0, 10, "ใบเสนอราคา (QUOTATION)", 0, 1, 'C')
 
-    # ข้อมูลลูกค้า และ เงื่อนไข
+    # Customer Info
     pdf.set_y(60)
     start_y = pdf.get_y()
     
-    # ซ้าย: ลูกค้า (ฟอนต์ใหญ่ขึ้น)
     pdf.set_font(use_f, 'B', 14)
     pdf.cell(20, 7, "ลูกค้า:", 0, 0)
     pdf.set_font(use_f, '', 14)
@@ -221,10 +253,8 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line):
     pdf.cell(0, 7, f"{d['contact']}", 0, 1)
     
     pdf.set_x(15)
-    # multi_cell สำหรับที่อยู่
     pdf.multi_cell(110, 6, f"ที่อยู่: {d['c_addr']}\nโทร: {d['c_tel']} แฟกซ์: {d['c_fax']}", 0, 'L')
     
-    # ขวา: เงื่อนไข
     pdf.set_xy(135, start_y)
     pdf.multi_cell(65, 7, 
         f"กำหนดส่ง: {d['due_date']}\n"
@@ -233,25 +263,20 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line):
         f"ครบกำหนด: {d['exp_date']}", 
         0, 'L')
 
-    # --- ตารางสินค้า ---
-    # *สำคัญ* 15 แถว เพื่อให้ฟอนต์ใหญ่ได้และไม่ล้นหน้า A4
+    # Table
     MAX_ROWS = 15 
     pdf.set_y(95)
-    
-    # กำหนดความกว้างคอลัมน์ (ปรับให้รวมกันได้ 180mm พอดีขอบ)
     cols_w = [12, 73, 15, 15, 25, 15, 25] 
     headers = ["ลำดับ", "รายการสินค้า", "จำนวน", "หน่วย", "ราคา/หน่วย", "ส่วนลด", "จำนวนเงิน"]
     
-    # หัวตาราง
     pdf.set_fill_color(240, 240, 240)
-    pdf.set_font(use_f, 'B', 13) # หัวตารางใหญ่ขึ้น
+    pdf.set_font(use_f, 'B', 13)
     for i, h in enumerate(headers):
         pdf.cell(cols_w[i], 9, h, 1, 0, 'C', True)
     pdf.ln()
 
-    # Loop แสดงรายการ
-    pdf.set_font(use_f, '', 13) # เนื้อหาในตารางใหญ่ขึ้น (13pt)
-    row_height = 8 # ความสูงบรรทัดสินค้า
+    pdf.set_font(use_f, '', 13)
+    row_height = 8 
     
     valid_items = items_df[items_df['รายการ'].str.strip() != ""].copy()
     
@@ -273,7 +298,6 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line):
                 f"{total:,.2f}"
             ]
         else:
-            # ตีตารางเปล่า
             vals = ["", "", "", "", "", "", ""]
         
         for j, txt in enumerate(vals):
@@ -283,18 +307,16 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line):
             pdf.cell(cols_w[j], row_height, txt, 1, 0, align)
         pdf.ln()
 
-    # --- สรุปยอดเงิน (แก้ไข: บีบระยะบรรทัดให้ชิดกัน) ---
+    # Summary
     pdf.ln(5)
     current_y = pdf.get_y()
     
-    # หมายเหตุ (ซ้าย) - ลดระยะห่างบรรทัดลงเหลือ 5
     pdf.set_xy(15, current_y)
     pdf.set_font(use_f, 'B', 14)
     pdf.cell(0, 7, "หมายเหตุ / Remarks:", 0, 1)
     pdf.set_font(use_f, '', 13)
-    pdf.multi_cell(100, 5, remark_text, 0, 'L') # <-- แก้ไข: ลด line-height เหลือ 5
+    pdf.multi_cell(100, 5, remark_text, 0, 'L')
     
-    # ตัวเลข (ขวา) - บีบให้ชิดกัน
     sum_x_label = 135
     sum_x_val = 175
     sum_y = current_y
@@ -303,10 +325,10 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line):
         nonlocal sum_y
         pdf.set_xy(sum_x_label, sum_y)
         pdf.set_font(use_f, 'B' if bold else '', 13)
-        pdf.cell(40, 6, label, 0, 0, 'R') # <-- แก้ไข: ลดความสูงช่องเหลือ 6
+        pdf.cell(40, 6, label, 0, 0, 'R')
         pdf.set_xy(sum_x_val, sum_y)
-        pdf.cell(25, 6, f"{value:,.2f}", 'B' if line else 0, 1, 'R') # <-- แก้ไข: ลดความสูงช่องเหลือ 6
-        sum_y += 6 # <-- แก้ไข: เพิ่มระยะทีละ 6 พอ (เดิม 7)
+        pdf.cell(25, 6, f"{value:,.2f}", 'B' if line else 0, 1, 'R')
+        sum_y += 6
 
     print_sum_row("รวมเงินสินค้า:", summary['gross'])
     print_sum_row("หักส่วนลด:", summary['discount'])
@@ -317,8 +339,7 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line):
         
     print_sum_row("ยอดรวมทั้งสิ้น:", summary['grand_total'], True, True)
 
-    # --- ลายเซ็น (แก้ไข: ย้ายลงล่างสุด ล่างสุดของหน้ากระดาษ) ---
-    # ใช้ -35 เพื่อดันลงไปเกือบชิดขอบกระดาษ (ล่างสุดเท่าที่จะเป็นไปได้โดยไม่ตกขอบ)
+    # Signatures
     pdf.set_y(-25) 
     pdf.set_font(use_f, '', 13)
     
@@ -326,7 +347,6 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line):
     names = [sigs['s1'], sigs['s2'], sigs['s3']]
     x_positions = [20, 85, 150]
     
-    # เก็บค่า Y ปัจจุบันตรงโซนล่าง
     y_sig = pdf.get_y()
     
     for i in range(3):
@@ -343,7 +363,7 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line):
     return bytes(pdf.output())
 
 # ==========================================
-# 4. USER INTERFACE (MAIN)
+# 5. USER INTERFACE (MAIN)
 # ==========================================
 def clear_all_data():
     st.session_state.grid_df = pd.DataFrame([{"รหัสสินค้า": "", "รายการ": "", "จำนวน": 0.0, "หน่วย": "", "ราคา": 0.0, "ส่วนลด": 0.0}] * 15)
@@ -351,6 +371,7 @@ def clear_all_data():
     for k in reset_keys:
         if k in st.session_state: st.session_state[k] = ""
     st.session_state["cust_selector_tab1"] = "-- พิมพ์เอง --"
+    st.session_state.generated_pdf_bytes = None # Reset PDF เมื่อล้าง
     st.toast("ล้างข้อมูลหน้าจอเรียบร้อย", icon="🗑️")
 
 def update_customer_fields():
@@ -362,6 +383,27 @@ def update_customer_fields():
         st.session_state.c_addr_in = str(row['ที่อยู่']) if pd.notna(row['ที่อยู่']) else ""
         st.session_state.c_tel_in = str(row['โทร']) if pd.notna(row['โทร']) else ""
         st.session_state.c_fax_in = str(row['แฟกซ์']) if pd.notna(row['แฟกซ์']) else ""
+
+# --- SIDEBAR: Email Settings ---
+with st.sidebar:
+    st.header("📧 ตั้งค่าอีเมล (SMTP)")
+    with st.expander("ตั้งค่าบัญชีผู้ส่ง (Sender)"):
+        st.info("สำหรับ Gmail ต้องใช้ App Password (ไม่ใช่รหัสผ่านปกติ)")
+        email_sender = st.text_input("อีเมลผู้ส่ง (Sender Email)", placeholder="your@gmail.com")
+        email_password = st.text_input("รหัสผ่านแอพ (App Password)", type="password")
+    
+    st.divider()
+    st.caption("ระบบโดย Siwakit Trading")
+
+# --- MAIN HEADER with Lottie ---
+col_head1, col_head2 = st.columns([0.8, 0.2])
+with col_head1:
+    st.title("SIWAKIT TRADING SYSTEM")
+    st.caption("ระบบออกใบเสนอราคาและจัดการฐานข้อมูลครบวงจร")
+with col_head2:
+    # แสดง Animation ที่มุมขวาบน
+    if lottie_office:
+        st_lottie(lottie_office, height=100, key="header_lottie")
 
 tab1, tab2, tab3, tab4 = st.tabs(["📝 สร้างใบเสนอราคา", "👥 ฐานข้อมูลลูกค้า", "📦 ฐานข้อมูลสินค้า", "🗂️ ประวัติเอกสาร"])
 
@@ -478,7 +520,6 @@ with tab1:
         
         vat_style = "" if has_vat else "display: none;"
         
-        # HTML Display
         st.markdown(f"""
         <div class="metric-card">
             <div class="metric-label">ยอดรวมทั้งสิ้น (Grand Total)</div>
@@ -551,8 +592,56 @@ with tab1:
                 st.session_state.remark_in, has_vat
             )
             
-            st.success("✅ สร้างไฟล์เรียบร้อย!")
-            st.download_button("📥 ดาวน์โหลด PDF", pdf_bytes, f"{doc_no}.pdf", "application/pdf", use_container_width=True)
+            # Save to Session State for Download/Email
+            st.session_state.generated_pdf_bytes = pdf_bytes
+            st.session_state.last_doc_no = doc_no
+            st.success("✅ บันทึกข้อมูลเรียบร้อย!")
+            st.rerun()
+
+    # --- ส่วนแสดงผลหลังจากสร้าง PDF เสร็จ (ดาวน์โหลด + ส่งอีเมล) ---
+    if st.session_state.generated_pdf_bytes is not None:
+        st.divider()
+        st.subheader(f"📄 จัดการเอกสาร: {st.session_state.last_doc_no}")
+        
+        act_col1, act_col2 = st.columns(2)
+        with act_col1:
+            st.info("1. ดาวน์โหลดไฟล์")
+            st.download_button(
+                "📥 ดาวน์โหลด PDF", 
+                st.session_state.generated_pdf_bytes, 
+                f"{st.session_state.last_doc_no}.pdf", 
+                "application/pdf", 
+                use_container_width=True,
+                type="primary"
+            )
+        
+        with act_col2:
+            st.info("2. ส่งอีเมลหาลูกค้า")
+            with st.form("email_form"):
+                recip_email = st.text_input("อีเมลลูกค้า", placeholder="customer@example.com")
+                email_subj = st.text_input("หัวข้ออีเมล", value=f"ใบเสนอราคาเลขที่ {st.session_state.last_doc_no}")
+                email_body = st.text_area("ข้อความ", value="เรียน ลูกค้า,\n\nแนบใบเสนอราคามาพร้อมกับอีเมลนี้ครับ\n\nขอบคุณครับ")
+                
+                submitted = st.form_submit_button("📤 ส่งอีเมลทันที", use_container_width=True)
+                
+                if submitted:
+                    if not email_sender or not email_password:
+                        st.error("❌ กรุณากรอกอีเมลและรหัสผ่านผู้ส่งใน Sidebar ด้านซ้ายก่อน")
+                    elif not recip_email:
+                        st.error("❌ กรุณากรอกอีเมลลูกค้า")
+                    else:
+                        success, msg = send_email_with_attachment(
+                            email_sender, email_password, recip_email, 
+                            email_subj, email_body, 
+                            st.session_state.generated_pdf_bytes, 
+                            f"{st.session_state.last_doc_no}.pdf"
+                        )
+                        if success:
+                            st.success(f"✅ {msg}")
+                            if lottie_success:
+                                st_lottie(lottie_success, height=150, key="success_anim")
+                        else:
+                            st.error(f"❌ {msg}")
 
 # ------------------------------------------------------------------
 # TAB 2: ลูกค้า
