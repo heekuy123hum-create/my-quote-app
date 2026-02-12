@@ -3,3 +3,6 @@ pandas
 st-supabase-connection
 supabase
 fpdf2
+requests
+streamlit-lottie
+
