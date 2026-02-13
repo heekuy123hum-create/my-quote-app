@@ -17,7 +17,7 @@ from email import encoders
 # ==========================================
 st.set_page_config(page_title="SIWAKIT TRADING SYSTEM", layout="wide", page_icon="🏢")
 
-# --- CSS ตกแต่ง UI (ปรับปรุงใหม่ให้สวยงาม Modern) ---
+# --- CSS ตกแต่ง UI (แก้ไขเรื่อง Tab มองไม่เห็นตัวหนังสือ) ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;600&display=swap');
@@ -105,7 +105,7 @@ st.markdown("""
         text-shadow: 2px 2px 0px rgba(255,255,255,1);
     }
     
-    /* Tab Styling */
+    /* Tab Styling (จุดที่แก้ไข) */
     .stTabs [data-baseweb="tab-list"] {
         gap: 10px;
     }
@@ -117,6 +117,7 @@ st.markdown("""
         border: 1px solid #e2e8f0;
         border-bottom: none;
         padding: 0 20px;
+        color: #334155; /* เพิ่มบรรทัดนี้: บังคับให้ตัวหนังสือสีเข้ม จะได้มองเห็นบนพื้นขาว */
     }
     .stTabs [aria-selected="true"] {
         background-color: #fff;
@@ -434,7 +435,7 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line):
     return bytes(pdf.output())
 
 # ==========================================
-# 5. USER INTERFACE (ปรับ UI ใหม่ทั้งหมดในส่วนแสดงผล)
+# 5. USER INTERFACE
 # ==========================================
 def clear_all_data():
     st.session_state.grid_df = pd.DataFrame([{"รหัสสินค้า": "", "รายการ": "", "จำนวน": 0.0, "หน่วย": "", "ราคา": 0.0, "ส่วนลด": 0.0}] * 15)
