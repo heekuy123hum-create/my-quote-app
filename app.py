@@ -17,58 +17,129 @@ from email import encoders
 # ==========================================
 st.set_page_config(page_title="SIWAKIT TRADING SYSTEM", layout="wide", page_icon="🏢")
 
-# --- CSS ตกแต่ง UI ---
+# --- CSS ตกแต่ง UI (ปรับปรุงใหม่ให้สวยงาม Modern) ---
 st.markdown("""
 <style>
+    @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;600&display=swap');
+
     html, body, [class*="css"] {
-        font-family: 'Sarabun', sans-serif;
+        font-family: 'Prompt', sans-serif;
+        background-color: #f8f9fa;
     }
-    h1, h2, h3 {
-        color: #2c3e50;
+    
+    /* Header Styling */
+    h1 {
+        color: #1e3a8a;
+        font-weight: 700;
+        font-size: 2.2rem;
     }
+    h2, h3 {
+        color: #334155;
+        font-weight: 600;
+    }
+
+    /* Custom Cards */
+    .custom-card {
+        background-color: white;
+        padding: 20px;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        margin-bottom: 20px;
+        border: 1px solid #e2e8f0;
+    }
+    
+    /* Input Fields Styling */
+    .stTextInput > div > div > input {
+        border-radius: 8px;
+        border: 1px solid #cbd5e1;
+    }
+    .stSelectbox > div > div > div {
+        border-radius: 8px;
+    }
+
+    /* Button Styling */
     .stButton>button {
         border-radius: 8px;
         height: 3em;
-        font-weight: bold;
+        font-weight: 600;
+        transition: all 0.2s;
     }
+    .stButton>button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+
+    /* Metric Card (ใบเสร็จ) */
     .metric-card {
-        background-color: #d4edda;
-        border: 1px solid #c3e6cb;
-        padding: 20px;
-        border-radius: 10px;
-        color: #155724;
-        text-align: center;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        margin-top: 10px;
+        background: linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%);
+        border: 1px solid #bbf7d0;
+        padding: 25px;
+        border-radius: 15px;
+        color: #166534;
+        text-align: right;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        position: relative;
+        overflow: hidden;
+    }
+    .metric-card::before {
+        content: "฿";
+        position: absolute;
+        top: -20px;
+        left: -20px;
+        font-size: 8rem;
+        color: rgba(34, 197, 94, 0.1);
+        font-weight: bold;
     }
     .metric-label {
-        font-size: 1.2rem;
+        font-size: 1rem;
         margin-bottom: 5px;
-        font-weight: bold;
+        font-weight: 600;
+        color: #15803d;
+        text-transform: uppercase;
+        letter-spacing: 1px;
     }
     .metric-value {
-        font-size: 2.5rem;
+        font-size: 3rem;
         font-weight: 800;
-        color: #28a745;
-        text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+        color: #15803d;
+        text-shadow: 2px 2px 0px rgba(255,255,255,1);
     }
-    .vat-hidden {
-        display: none;
+    
+    /* Tab Styling */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 10px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        height: 50px;
+        white-space: pre-wrap;
+        background-color: #ffffff;
+        border-radius: 10px 10px 0 0;
+        border: 1px solid #e2e8f0;
+        border-bottom: none;
+        padding: 0 20px;
+    }
+    .stTabs [aria-selected="true"] {
+        background-color: #fff;
+        border-top: 3px solid #3b82f6;
+        color: #3b82f6;
+        font-weight: bold;
     }
 </style>
 """, unsafe_allow_html=True)
 
 # --- Lottie Animation Loader ---
 def load_lottieurl(url: str):
-    r = requests.get(url)
-    if r.status_code != 200:
+    try:
+        r = requests.get(url)
+        if r.status_code != 200:
+            return None
+        return r.json()
+    except:
         return None
-    return r.json()
 
-# โหลด Animation (ตัวอย่าง: Animation เอกสาร และ จรวด)
+# โหลด Animation
 lottie_office = load_lottieurl("https://lottie.host/5a8b7928-8924-4069-950c-1123533866b1/0XgV0lK1uF.json")
 lottie_success = load_lottieurl("https://assets9.lottiefiles.com/packages/lf20_ttv8K8.json")
-lottie_email = load_lottieurl("https://lottie.host/9f6d6344-933e-4091-897b-3b3644026369/123456.json") # Placeholder URL
 
 # ชื่อไฟล์สำหรับเก็บข้อมูล
 CUST_FILE = "database_customers.csv"
@@ -87,7 +158,7 @@ if "last_doc_no" not in st.session_state:
     st.session_state.last_doc_no = ""
 
 # ==========================================
-# 2. EMAIL SYSTEM FUNCTION
+# 2. EMAIL SYSTEM FUNCTION (คงเดิม)
 # ==========================================
 def send_email_with_attachment(sender_email, sender_password, receiver_email, subject, body, file_bytes, filename):
     try:
@@ -116,7 +187,7 @@ def send_email_with_attachment(sender_email, sender_password, receiver_email, su
         return False, f"เกิดข้อผิดพลาด: {str(e)}"
 
 # ==========================================
-# 3. DATABASE MANAGEMENT (LOAD & SAVE)
+# 3. DATABASE MANAGEMENT (คงเดิม)
 # ==========================================
 def load_data():
     # --- 1. โหลดข้อมูลลูกค้า ---
@@ -194,7 +265,7 @@ def to_num(val):
 load_data()
 
 # ==========================================
-# 4. PDF ENGINE (ระบบเดิม)
+# 4. PDF ENGINE (คงเดิม ตามสั่ง)
 # ==========================================
 def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line):
     pdf = FPDF(unit='mm', format='A4')
@@ -363,7 +434,7 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line):
     return bytes(pdf.output())
 
 # ==========================================
-# 5. USER INTERFACE (MAIN)
+# 5. USER INTERFACE (ปรับ UI ใหม่ทั้งหมดในส่วนแสดงผล)
 # ==========================================
 def clear_all_data():
     st.session_state.grid_df = pd.DataFrame([{"รหัสสินค้า": "", "รายการ": "", "จำนวน": 0.0, "หน่วย": "", "ราคา": 0.0, "ส่วนลด": 0.0}] * 15)
@@ -371,7 +442,7 @@ def clear_all_data():
     for k in reset_keys:
         if k in st.session_state: st.session_state[k] = ""
     st.session_state["cust_selector_tab1"] = "-- พิมพ์เอง --"
-    st.session_state.generated_pdf_bytes = None # Reset PDF เมื่อล้าง
+    st.session_state.generated_pdf_bytes = None
     st.toast("ล้างข้อมูลหน้าจอเรียบร้อย", icon="🗑️")
 
 def update_customer_fields():
@@ -386,77 +457,96 @@ def update_customer_fields():
 
 # --- SIDEBAR: Email Settings ---
 with st.sidebar:
-    st.header("📧 ตั้งค่าอีเมล (SMTP)")
-    with st.expander("ตั้งค่าบัญชีผู้ส่ง (Sender)"):
-        st.info("สำหรับ Gmail ต้องใช้ App Password (ไม่ใช่รหัสผ่านปกติ)")
-        email_sender = st.text_input("อีเมลผู้ส่ง (Sender Email)", placeholder="your@gmail.com")
+    st.markdown("### ⚙️ Control Panel")
+    with st.expander("📧 ตั้งค่าอีเมล (SMTP)", expanded=False):
+        st.info("สำหรับ Gmail ต้องใช้ App Password")
+        email_sender = st.text_input("อีเมลผู้ส่ง (Sender)", placeholder="your@gmail.com")
         email_password = st.text_input("รหัสผ่านแอพ (App Password)", type="password")
     
     st.divider()
-    st.caption("ระบบโดย Siwakit Trading")
+    st.caption("© 2024 Siwakit Trading System v2.0")
 
-# --- MAIN HEADER with Lottie ---
-col_head1, col_head2 = st.columns([0.8, 0.2])
+# --- MAIN HEADER with Layout ---
+st.markdown('<div style="padding-bottom: 20px;">', unsafe_allow_html=True)
+col_head1, col_head2 = st.columns([0.7, 0.3])
 with col_head1:
-    st.title("SIWAKIT TRADING SYSTEM")
-    st.caption("ระบบออกใบเสนอราคาและจัดการฐานข้อมูลครบวงจร")
+    st.title("SIWAKIT TRADING")
+    st.markdown("#### 🏢 ระบบออกใบเสนอราคาและจัดการฐานข้อมูล")
 with col_head2:
-    # แสดง Animation ที่มุมขวาบน
     if lottie_office:
-        st_lottie(lottie_office, height=100, key="header_lottie")
+        st_lottie(lottie_office, height=120, key="header_lottie")
+st.markdown('</div>', unsafe_allow_html=True)
 
-tab1, tab2, tab3, tab4 = st.tabs(["📝 สร้างใบเสนอราคา", "👥 ฐานข้อมูลลูกค้า", "📦 ฐานข้อมูลสินค้า", "🗂️ ประวัติเอกสาร"])
+# Tabs Navigation
+tab1, tab2, tab3, tab4 = st.tabs([
+    "📝 สร้างใบเสนอราคา (Quotation)", 
+    "👥 ฐานข้อมูลลูกค้า (Customers)", 
+    "📦 ฐานข้อมูลสินค้า (Products)", 
+    "🗂️ ประวัติเอกสาร (History)"
+])
 
 # ------------------------------------------------------------------
-# TAB 1: Quotation
+# TAB 1: Quotation (UI REVAMP)
 # ------------------------------------------------------------------
 with tab1:
-    # Group 1: ข้อมูลผู้ขายและเอกสาร
+    # 1. Header Info Section (Seller + Doc Info)
     with st.container(border=True):
-        st.subheader("🏢 ข้อมูลบริษัทและเอกสาร")
-        col1, col2 = st.columns(2)
-        with col1:
-            st.text_input("ชื่อบริษัท", "บริษัท ศิวกิจ เทรดดิ้ง จำกัด", key="my_comp_in")
-            st.text_input("ที่อยู่บริษัท", "123 ถนนตัวอย่าง กทม.", key="my_addr_in") 
-            c1, c2, c3 = st.columns(3)
-            with c1: st.text_input("โทรศัพท์", key="my_tel_in")        
-            with c2: st.text_input("แฟกซ์", key="my_fax_in")        
-            with c3: st.text_input("เลขผู้เสียภาษี", key="my_tax_in")
-        
-        with col2:
-            st.text_input("เลขที่ใบเสนอราคา", f"QT-{datetime.now().strftime('%Y%m%d')}-001", key="doc_no_in")
-            st.date_input("วันที่ออกเอกสาร", date.today(), key="doc_date_in")
-            st.text_input("กำหนดส่ง", "ภายใน 7-15 วัน", key="due_date_in")
+        st.markdown("##### 🧾 ข้อมูลเอกสารและผู้ขาย (Document Info)")
+        c1, c2 = st.columns([1.5, 1])
+        with c1:
+            col_s1, col_s2 = st.columns(2)
+            with col_s1:
+                st.text_input("ชื่อบริษัทผู้ขาย", "บริษัท ศิวกิจ เทรดดิ้ง จำกัด", key="my_comp_in")
+                st.text_input("โทรศัพท์", key="my_tel_in")
+            with col_s2:
+                st.text_input("ที่อยู่บริษัท", "123 ถนนตัวอย่าง กทม.", key="my_addr_in")
+                st.text_input("เลขผู้เสียภาษี", key="my_tax_in")
+                st.text_input("แฟกซ์", key="my_fax_in") # ย้ายแฟกซ์มาตรงนี้ให้สมดุล
+                
+        with c2:
+            st.markdown("""<div style="background-color:#eff6ff; padding:15px; border-radius:10px;">""", unsafe_allow_html=True)
+            dc1, dc2 = st.columns(2)
+            with dc1:
+                st.text_input("เลขที่ใบเสนอราคา", f"QT-{datetime.now().strftime('%Y%m%d')}-001", key="doc_no_in")
+                st.text_input("ยืนราคา (วัน)", "30", key="valid_days_in")
+            with dc2:
+                st.date_input("วันที่เอกสาร", date.today(), key="doc_date_in")
+                st.text_input("เครดิต (วัน)", "30", key="credit_in")
             
-            r1, r2 = st.columns(2)
-            with r1: st.text_input("ยืนราคา (วัน)", "30", key="valid_days_in")
-            with r2: st.text_input("เครดิต (วัน)", "30", key="credit_in")
+            st.text_input("กำหนดส่งสินค้า", "ภายใน 7-15 วัน", key="due_date_in")
+            st.markdown("</div>", unsafe_allow_html=True)
 
-    st.write("---")
-
-    # Group 2: ข้อมูลลูกค้า
+    # 2. Customer Info Section
     with st.container(border=True):
-        c_h1, c_h2 = st.columns([1, 1])
-        with c_h1: st.subheader("👤 ข้อมูลลูกค้า")
-        with c_h2: 
+        # Header Row for Customer
+        cust_h1, cust_h2 = st.columns([0.6, 0.4])
+        with cust_h1: 
+            st.markdown("##### 👤 ข้อมูลลูกค้า (Customer Details)")
+        with cust_h2: 
+            # Dropdown เลือกลูกค้า (Logic เดิม)
             opts = ["-- พิมพ์เอง --"] + st.session_state.db_customers['ชื่อบริษัท'].dropna().unique().tolist()
-            st.selectbox("📥 ดึงลูกค้าเก่า", opts, key="cust_selector_tab1", on_change=update_customer_fields)
+            st.selectbox("🔍 ค้นหาลูกค้าเก่า", opts, key="cust_selector_tab1", on_change=update_customer_fields, label_visibility="collapsed")
 
-        c_col1, c_col2 = st.columns(2)
-        with c_col1:
-            st.text_input("ชื่อบริษัทลูกค้า", key="c_name_in")
-            st.text_input("ชื่อผู้ติดต่อ", key="contact_in")
-            st.text_area("ที่อยู่จัดส่ง", height=70, key="c_addr_in")
-        with c_col2:
+        # Customer Fields
+        cc1, cc2, cc3 = st.columns([1.5, 1, 1])
+        with cc1:
+            st.text_input("ชื่อบริษัทลูกค้า", key="c_name_in", placeholder="ระบุชื่อบริษัท...")
+            st.text_area("ที่อยู่จัดส่ง", height=109, key="c_addr_in", placeholder="ที่อยู่...")
+        with cc2:
+            st.text_input("ผู้ติดต่อ", key="contact_in", placeholder="ชื่อผู้ติดต่อ...")
             st.text_input("เบอร์โทรศัพท์", key="c_tel_in")
+        with cc3:
+            st.write("") # Spacer
+            st.write("") # Spacer
+            st.write("") # Spacer (ดันลงมาให้ตรงกับ address)
             st.text_input("เบอร์แฟกซ์", key="c_fax_in")
 
-    st.write("---")
-
-    # Group 3: ตารางสินค้า
-    st.subheader("📦 รายการสินค้า")
+    # 3. Items Table
+    st.markdown("##### 📦 รายการสินค้า (Items)")
+    
     prod_opts = st.session_state.db_products['รหัสสินค้า'].astype(str).unique().tolist()
     
+    # Logic เดิม 100%
     edited_df = st.data_editor(
         st.session_state.grid_df,
         column_config={
@@ -472,7 +562,7 @@ with tab1:
         key="editor_main"
     )
 
-    # Auto-fill Logic
+    # Auto-fill Logic (คงเดิม)
     needs_rerun = False
     for idx, row in edited_df.iterrows():
         code = str(row['รหัสสินค้า'])
@@ -490,7 +580,7 @@ with tab1:
     else:
         st.session_state.grid_df = edited_df
 
-    # Calculation
+    # Calculation Logic
     calc_df = edited_df.copy()
     calc_df['q'] = calc_df['จำนวน'].apply(to_num)
     calc_df['p'] = calc_df['ราคา'].apply(to_num)
@@ -503,17 +593,21 @@ with tab1:
 
     st.write("---")
 
-    # Group 4: สรุปและปุ่ม
-    f_col1, f_col2 = st.columns([1.5, 1])
+    # 4. Summary & Actions
+    f_col1, f_col2 = st.columns([1.8, 1])
+    
     with f_col1:
-        st.text_area("📝 หมายเหตุ", value="1. ราคายังไม่รวม VAT 7%\n2. กำหนดยืนราคา 30 วัน", key="remark_in", height=100)
-        st.caption("ข้อมูลผู้ลงนาม")
+        st.markdown("##### 📝 หมายเหตุ & การอนุมัติ")
+        st.text_area("หมายเหตุ (Remarks)", value="1. ราคายังไม่รวม VAT 7%\n2. กำหนดยืนราคา 30 วัน", key="remark_in", height=100, label_visibility="collapsed")
+        
+        st.markdown("<br>", unsafe_allow_html=True)
         s1, s2, s3 = st.columns(3)
         with s1: st.text_input("ผู้สั่งซื้อ", key="s1_in")
         with s2: st.text_input("พนักงานขาย", key="s2_in")
         with s3: st.text_input("ผู้อนุมัติ", key="s3_in")
 
     with f_col2:
+        # Grand Total Card
         has_vat = st.checkbox("คำนวณ VAT 7%", value=True)
         vat_val = sum_sub * 0.07 if has_vat else 0.0
         grand_total = sum_sub + vat_val
@@ -523,13 +617,13 @@ with tab1:
         st.markdown(f"""
         <div class="metric-card">
             <div class="metric-label">ยอดรวมทั้งสิ้น (Grand Total)</div>
-            <div class="metric-value">{grand_total:,.2f} บาท</div>
-            <div style="margin-top: 15px; font-size: 0.9rem; color: #555; text-align: right; padding-right: 20px;">
+            <div class="metric-value">{grand_total:,.2f}</div>
+            <div style="margin-top: 15px; font-size: 0.9rem; color: #555; text-align: right; border-top: 1px dashed #ccc; padding-top:10px;">
                 <table style="width: 100%;">
-                    <tr><td style="text-align: left;">รวมสินค้า:</td><td style="text-align: right;">{sum_gross:,.2f}</td></tr>
-                    <tr><td style="text-align: left;">ส่วนลด:</td><td style="text-align: right; color: red;">-{sum_disc:,.2f}</td></tr>
-                    <tr><td style="text-align: left; font-weight: bold;">ก่อนภาษี:</td><td style="text-align: right; font-weight: bold;">{sum_sub:,.2f}</td></tr>
-                    <tr style="{vat_style}"><td style="text-align: left;">VAT 7%:</td><td style="text-align: right;">{vat_val:,.2f}</td></tr>
+                    <tr><td style="text-align: left; color:#666;">รวมสินค้า:</td><td style="text-align: right;">{sum_gross:,.2f}</td></tr>
+                    <tr><td style="text-align: left; color:#666;">ส่วนลด:</td><td style="text-align: right; color: #dc2626;">-{sum_disc:,.2f}</td></tr>
+                    <tr><td style="text-align: left; font-weight: 600;">ก่อนภาษี:</td><td style="text-align: right; font-weight: 600;">{sum_sub:,.2f}</td></tr>
+                    <tr style="{vat_style}"><td style="text-align: left; color:#666;">VAT 7%:</td><td style="text-align: right;">{vat_val:,.2f}</td></tr>
                 </table>
             </div>
         </div>
@@ -537,12 +631,13 @@ with tab1:
 
     st.markdown("###")
     
-    b1, b2 = st.columns([0.3, 0.7])
+    # Action Buttons
+    b1, b2 = st.columns([0.2, 0.8])
     with b1:
         st.button("🧹 ล้างหน้าจอ", on_click=clear_all_data, use_container_width=True)
     with b2:
         if st.button("🚀 บันทึกและพิมพ์ PDF", type="primary", use_container_width=True):
-            # 1. Save History
+            # 1. Save History (Logic คงเดิม)
             doc_no = st.session_state.doc_no_in
             json_data = {
                 "grid_df": edited_df.to_dict(),
@@ -572,7 +667,7 @@ with tab1:
             st.session_state.db_history = pd.concat([pd.DataFrame([new_rec]), st.session_state.db_history], ignore_index=True)
             save_data(st.session_state.db_history, HISTORY_FILE)
             
-            # 2. Create PDF
+            # 2. Create PDF (Logic คงเดิม)
             pdf_data = {
                 "my_comp": st.session_state.my_comp_in, "my_addr": st.session_state.my_addr_in,
                 "my_tel": st.session_state.my_tel_in, "my_fax": st.session_state.my_fax_in, "my_tax": st.session_state.my_tax_in,
@@ -592,65 +687,65 @@ with tab1:
                 st.session_state.remark_in, has_vat
             )
             
-            # Save to Session State for Download/Email
             st.session_state.generated_pdf_bytes = pdf_bytes
             st.session_state.last_doc_no = doc_no
             st.success("✅ บันทึกข้อมูลเรียบร้อย!")
             st.rerun()
 
-    # --- ส่วนแสดงผลหลังจากสร้าง PDF เสร็จ (ดาวน์โหลด + ส่งอีเมล) ---
+    # --- ส่วน Download / Email ---
     if st.session_state.generated_pdf_bytes is not None:
         st.divider()
-        st.subheader(f"📄 จัดการเอกสาร: {st.session_state.last_doc_no}")
+        st.markdown(f"#### 🚀 จัดการเอกสาร: `{st.session_state.last_doc_no}`")
         
-        act_col1, act_col2 = st.columns(2)
-        with act_col1:
-            st.info("1. ดาวน์โหลดไฟล์")
-            st.download_button(
-                "📥 ดาวน์โหลด PDF", 
-                st.session_state.generated_pdf_bytes, 
-                f"{st.session_state.last_doc_no}.pdf", 
-                "application/pdf", 
-                use_container_width=True,
-                type="primary"
-            )
-        
-        with act_col2:
-            st.info("2. ส่งอีเมลหาลูกค้า")
-            with st.form("email_form"):
-                recip_email = st.text_input("อีเมลลูกค้า", placeholder="customer@example.com")
-                email_subj = st.text_input("หัวข้ออีเมล", value=f"ใบเสนอราคาเลขที่ {st.session_state.last_doc_no}")
-                email_body = st.text_area("ข้อความ", value="เรียน ลูกค้า,\n\nแนบใบเสนอราคามาพร้อมกับอีเมลนี้ครับ\n\nขอบคุณครับ")
-                
-                submitted = st.form_submit_button("📤 ส่งอีเมลทันที", use_container_width=True)
-                
-                if submitted:
-                    if not email_sender or not email_password:
-                        st.error("❌ กรุณากรอกอีเมลและรหัสผ่านผู้ส่งใน Sidebar ด้านซ้ายก่อน")
-                    elif not recip_email:
-                        st.error("❌ กรุณากรอกอีเมลลูกค้า")
-                    else:
-                        success, msg = send_email_with_attachment(
-                            email_sender, email_password, recip_email, 
-                            email_subj, email_body, 
-                            st.session_state.generated_pdf_bytes, 
-                            f"{st.session_state.last_doc_no}.pdf"
-                        )
-                        if success:
-                            st.success(f"✅ {msg}")
-                            if lottie_success:
-                                st_lottie(lottie_success, height=150, key="success_anim")
+        with st.container(border=True):
+            act_col1, act_col2 = st.columns(2)
+            with act_col1:
+                st.info("1. ดาวน์โหลดไฟล์ (Download)")
+                st.download_button(
+                    "📥 ดาวน์โหลด PDF", 
+                    st.session_state.generated_pdf_bytes, 
+                    f"{st.session_state.last_doc_no}.pdf", 
+                    "application/pdf", 
+                    use_container_width=True,
+                    type="primary"
+                )
+            
+            with act_col2:
+                st.info("2. ส่งอีเมลหาลูกค้า (Send Email)")
+                with st.form("email_form"):
+                    recip_email = st.text_input("อีเมลลูกค้า", placeholder="customer@example.com")
+                    email_subj = st.text_input("หัวข้ออีเมล", value=f"ใบเสนอราคาเลขที่ {st.session_state.last_doc_no}")
+                    email_body = st.text_area("ข้อความ", value="เรียน ลูกค้า,\n\nแนบใบเสนอราคามาพร้อมกับอีเมลนี้ครับ\n\nขอบคุณครับ")
+                    
+                    submitted = st.form_submit_button("📤 ส่งอีเมลทันที", use_container_width=True)
+                    
+                    if submitted:
+                        if not email_sender or not email_password:
+                            st.error("❌ กรุณากรอกอีเมลและรหัสผ่านผู้ส่งใน Sidebar ด้านซ้ายก่อน")
+                        elif not recip_email:
+                            st.error("❌ กรุณากรอกอีเมลลูกค้า")
                         else:
-                            st.error(f"❌ {msg}")
+                            success, msg = send_email_with_attachment(
+                                email_sender, email_password, recip_email, 
+                                email_subj, email_body, 
+                                st.session_state.generated_pdf_bytes, 
+                                f"{st.session_state.last_doc_no}.pdf"
+                            )
+                            if success:
+                                st.success(f"✅ {msg}")
+                                if lottie_success:
+                                    st_lottie(lottie_success, height=150, key="success_anim")
+                            else:
+                                st.error(f"❌ {msg}")
 
 # ------------------------------------------------------------------
-# TAB 2: ลูกค้า
+# TAB 2: ลูกค้า (Logic เดิม 100% ห้ามยุ่ง) -> แค่ใส่ Container ให้ดูดี
 # ------------------------------------------------------------------
 with tab2:
-    st.header("👥 จัดการฐานข้อมูลลูกค้า")
-    st.info("💡 วิธีใช้: แก้ไขข้อมูลในตาราง หรือติ๊ก 'ลบ' แล้วกดปุ่มบันทึกด้านล่าง (ปุ่มเดียวจบ)")
-    
     with st.container(border=True):
+        st.subheader("👥 จัดการฐานข้อมูลลูกค้า")
+        st.info("💡 วิธีใช้: แก้ไขข้อมูลในตาราง หรือติ๊ก 'ลบ' แล้วกดปุ่มบันทึกด้านล่าง (ปุ่มเดียวจบ)")
+        
         edited_customers = st.data_editor(
             st.session_state.db_customers, 
             num_rows="dynamic", 
@@ -663,21 +758,21 @@ with tab2:
             },
             key="cust_editor_v2"
         )
-    
-    if st.button("💾 บันทึกการเปลี่ยนแปลง (ลูกค้า)", type="primary", use_container_width=True):
-        saved_df = save_data(edited_customers, CUST_FILE, key_col="ชื่อบริษัท")
-        st.session_state.db_customers = saved_df
-        st.toast("✅ บันทึกและลบข้อมูลเรียบร้อย", icon="💾")
-        st.rerun()
+        
+        if st.button("💾 บันทึกการเปลี่ยนแปลง (ลูกค้า)", type="primary", use_container_width=True):
+            saved_df = save_data(edited_customers, CUST_FILE, key_col="ชื่อบริษัท")
+            st.session_state.db_customers = saved_df
+            st.toast("✅ บันทึกและลบข้อมูลเรียบร้อย", icon="💾")
+            st.rerun()
 
 # ------------------------------------------------------------------
-# TAB 3: สินค้า
+# TAB 3: สินค้า (Logic เดิม 100% ห้ามยุ่ง) -> แค่ใส่ Container ให้ดูดี
 # ------------------------------------------------------------------
 with tab3:
-    st.header("📦 จัดการฐานข้อมูลสินค้า")
-    st.info("💡 วิธีใช้: แก้ไขข้อมูลในตาราง หรือติ๊ก 'ลบ' แล้วกดปุ่มบันทึกด้านล่าง (ปุ่มเดียวจบ)")
-    
     with st.container(border=True):
+        st.subheader("📦 จัดการฐานข้อมูลสินค้า")
+        st.info("💡 วิธีใช้: แก้ไขข้อมูลในตาราง หรือติ๊ก 'ลบ' แล้วกดปุ่มบันทึกด้านล่าง (ปุ่มเดียวจบ)")
+        
         edited_products = st.data_editor(
             st.session_state.db_products, 
             num_rows="dynamic", 
@@ -691,59 +786,64 @@ with tab3:
             },
             key="prod_editor_v2"
         )
-    
-    if st.button("💾 บันทึกการเปลี่ยนแปลง (สินค้า)", type="primary", use_container_width=True):
-        saved_df = save_data(edited_products, PROD_FILE, key_col="รหัสสินค้า")
-        st.session_state.db_products = saved_df
-        st.toast("✅ บันทึกและลบข้อมูลเรียบร้อย", icon="💾")
-        st.rerun()
+        
+        if st.button("💾 บันทึกการเปลี่ยนแปลง (สินค้า)", type="primary", use_container_width=True):
+            saved_df = save_data(edited_products, PROD_FILE, key_col="รหัสสินค้า")
+            st.session_state.db_products = saved_df
+            st.toast("✅ บันทึกและลบข้อมูลเรียบร้อย", icon="💾")
+            st.rerun()
 
 # ------------------------------------------------------------------
-# TAB 4: ประวัติ
+# TAB 4: ประวัติ (Logic เดิม 100% ห้ามยุ่ง)
 # ------------------------------------------------------------------
 with tab4:
-    st.header("🗂️ ประวัติใบเสนอราคา")
-    
-    if not st.session_state.db_history.empty:
-        sel_hist = st.selectbox("เลือกเอกสารเพื่อแก้ไข", st.session_state.db_history['doc_no'].tolist())
-        if st.button("🔄 โหลดข้อมูลกลับหน้าแรก", use_container_width=True):
-            row = st.session_state.db_history[st.session_state.db_history['doc_no'] == sel_hist].iloc[0]
-            data = json.loads(row['data_json'])
-            
-            st.session_state.grid_df = pd.DataFrame.from_dict(data['grid_df'])
-            st.session_state.c_name_in = data.get('c_name', '')
-            st.session_state.contact_in = data.get('contact', '')
-            st.session_state.c_addr_in = data.get('c_addr', '')
-            st.session_state.c_tel_in = data.get('c_tel', '')
-            st.session_state.remark_in = data.get('remark', '')
-            st.session_state.doc_no_in = row['doc_no']
-            
-            if 'doc_date_str' in data:
-                try: st.session_state.doc_date_in = datetime.strptime(data['doc_date_str'], '%Y-%m-%d').date()
-                except: pass
-            
-            st.toast(f"โหลดข้อมูล {sel_hist} เรียบร้อย ไปที่ Tab 1 ได้เลย", icon="🔄")
-            
-        st.divider()
+    with st.container(border=True):
+        st.subheader("🗂️ ประวัติใบเสนอราคา")
         
-        edited_hist = st.data_editor(
-            st.session_state.db_history,
-            use_container_width=True,
-            hide_index=True,
-            column_config={
-                "ลบ": st.column_config.CheckboxColumn("ลบ (ติ๊กเพื่อลบ)", default=False),
-                "timestamp": st.column_config.TextColumn("เวลาบันทึก", disabled=True),
-                "doc_no": st.column_config.TextColumn("เลขที่", disabled=True),
-                "total": st.column_config.NumberColumn("ยอดรวม", format="%.2f", disabled=True),
-                "data_json": None
-            },
-            key="hist_editor"
-        )
-        
-        if st.button("💾 อัปเดตประวัติ", type="primary", use_container_width=True):
-            saved_hist = save_data(edited_hist, HISTORY_FILE)
-            st.session_state.db_history = saved_hist
-            st.toast("✅ อัปเดตประวัติเรียบร้อย", icon="💾")
-            st.rerun()
-    else:
-        st.info("ยังไม่มีประวัติ")
+        if not st.session_state.db_history.empty:
+            c_hist1, c_hist2 = st.columns([0.7, 0.3])
+            with c_hist1:
+                sel_hist = st.selectbox("เลือกเอกสารเพื่อแก้ไข", st.session_state.db_history['doc_no'].tolist())
+            with c_hist2:
+                if st.button("🔄 โหลดข้อมูลกลับหน้าแรก", use_container_width=True):
+                    row = st.session_state.db_history[st.session_state.db_history['doc_no'] == sel_hist].iloc[0]
+                    data = json.loads(row['data_json'])
+                    
+                    st.session_state.grid_df = pd.DataFrame.from_dict(data['grid_df'])
+                    st.session_state.c_name_in = data.get('c_name', '')
+                    st.session_state.contact_in = data.get('contact', '')
+                    st.session_state.c_addr_in = data.get('c_addr', '')
+                    st.session_state.c_tel_in = data.get('c_tel', '')
+                    st.session_state.c_fax_in = data.get('c_fax_in', '') # Added compat
+                    st.session_state.remark_in = data.get('remark', '')
+                    st.session_state.doc_no_in = row['doc_no']
+                    
+                    if 'doc_date_str' in data:
+                        try: st.session_state.doc_date_in = datetime.strptime(data['doc_date_str'], '%Y-%m-%d').date()
+                        except: pass
+                    
+                    st.toast(f"โหลดข้อมูล {sel_hist} เรียบร้อย ไปที่ Tab 1 ได้เลย", icon="🔄")
+            
+            st.divider()
+            
+            edited_hist = st.data_editor(
+                st.session_state.db_history,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "ลบ": st.column_config.CheckboxColumn("ลบ (ติ๊กเพื่อลบ)", default=False),
+                    "timestamp": st.column_config.TextColumn("เวลาบันทึก", disabled=True),
+                    "doc_no": st.column_config.TextColumn("เลขที่", disabled=True),
+                    "total": st.column_config.NumberColumn("ยอดรวม", format="%.2f", disabled=True),
+                    "data_json": None
+                },
+                key="hist_editor"
+            )
+            
+            if st.button("💾 อัปเดตประวัติ", type="primary", use_container_width=True):
+                saved_hist = save_data(edited_hist, HISTORY_FILE)
+                st.session_state.db_history = saved_hist
+                st.toast("✅ อัปเดตประวัติเรียบร้อย", icon="💾")
+                st.rerun()
+        else:
+            st.info("ยังไม่มีประวัติ")
