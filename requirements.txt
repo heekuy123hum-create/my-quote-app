@@ -5,4 +5,5 @@ supabase
 fpdf2
 requests
 streamlit-lottie
+bahttext
 
