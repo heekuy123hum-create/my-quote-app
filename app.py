@@ -399,8 +399,8 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line):
             f"ครบกำหนด: {d['exp_date']}", 
             0, 'L')
 
-        # --- TABLE ---
-        pdf.set_y(95)
+        # --- TABLE (MOVED UP FROM 95 TO 82) ---
+        pdf.set_y(82)
         cols_w = [12, 73, 15, 15, 25, 15, 25] 
         headers = ["ลำดับ", "รายการสินค้า", "จำนวน", "หน่วย", "ราคา/หน่วย", "ส่วนลด", "จำนวนเงิน"]
         
@@ -449,7 +449,6 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line):
 
         # --- SUMMARY (Only on Last Page) ---
         if page == num_pages - 1:
-            # *แก้ไข:* ลดระยะห่างบรรทัดจากเดิม ln(5) เหลือ ln(2) เพื่อให้ชิดตารางมากขึ้น
             pdf.ln(2)
             current_y = pdf.get_y()
             
@@ -458,10 +457,9 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line):
             pdf.set_font(use_f, 'B', 14)
             pdf.cell(0, 7, "หมายเหตุ / Remarks:", 0, 1)
             pdf.set_font(use_f, '', 13)
-            pdf.multi_cell(100, 5, remark_text, 0, 'L')
+            pdf.multi_cell(90, 5, remark_text, 0, 'L')
             
             # --- ส่วนตัวเลขสรุป (อยู่ขวา) ---
-            # ปรับตำแหน่งให้เหมาะสม
             sum_x_label = 135
             sum_x_val = 175
             sum_y = current_y
@@ -482,34 +480,24 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line):
             if show_vat_line:
                 print_sum_row("ภาษีมูลค่าเพิ่ม 7%:", summary['vat'])
                 
-            # *แก้ไข:* ส่วนยอดรวมทั้งสิ้น (Grand Total) และ ตัวหนังสือ (Baht Text)
-            # ให้อยู่บรรทัดเดียวกัน เพื่อประหยัดพื้นที่ และหนีลายเซ็น
-            # ฝั่งซ้ายของบรรทัด: ยอดรวม (ตัวเลข)
-            # ฝั่งขวาของบรรทัด: ตัวหนังสือภาษาไทย
-            
-            sum_y += 2 # เว้นนิดหน่อยก่อนเส้นบรรทัดสุดท้าย
-            
-            # 1. ยอดรวมตัวเลข (อยู่ฝั่งซ้ายของโซนสรุป หรือตามสั่งคือ ซ้ายสุดของบรรทัดนี้?)
-            # ตามสั่ง: "ยอดรวมทั้งสิ้นอยู่ฝั่งซ้าย สรุปผลการเงินแบบภาษาไทยอยู่ฝั่งขวา"
-            # ผมจะวางไว้ซ้ายสุดของหน้า (ตรงกับหมายเหตุ) และขวาสุดของหน้า เพื่อใช้พื้นที่เต็มความกว้าง
+            # *แก้ไข:* # 1. เอาการเว้นระยะออก (sum_y += 2)
+            # 2. จัดยอดรวมทั้งสิ้นและภาษาไทยให้อยู่ในโซนเดียวกัน ฝั่งขวา (Summary Column)
+            # 3. ทั้งคู่ชิดซ้ายของโซนนั้น (Left Aligned) และอยู่บรรทัดเดียวกัน
             
             grand_total_val = summary['grand_total']
             baht_text_str = bahttext(grand_total_val)
 
-            pdf.set_xy(15, sum_y) # เริ่มที่ขอบซ้ายสุด
-            pdf.set_font(use_f, 'B', 14)
-            pdf.cell(90, 8, f"ยอดรวมทั้งสิ้น:  {grand_total_val:,.2f}  บาท", 0, 0, 'L')
+            # ใช้ตำแหน่งเริ่มต้นที่ 105 (ซ้ายสุดของโซนสรุป) เพื่อให้มีพื้นที่สำหรับข้อความยาวๆ
+            pdf.set_xy(105, sum_y)
+            pdf.set_font(use_f, 'B', 13) 
             
-            pdf.set_xy(105, sum_y) # เริ่มที่กลางค่อนขวา
-            pdf.set_font(use_f, '', 13)
-            pdf.cell(90, 8, f"({baht_text_str})", 0, 1, 'R') # ชิดขวาสุด
+            # ยอดรวม (ชิดซ้ายของโซนนี้)
+            pdf.cell(50, 6, f"รวมสุทธิ: {grand_total_val:,.2f}", 0, 0, 'L')
+            
+            # ตัวหนังสือ (ชิดซ้ายของโซนนี้ ถัดจากยอดรวม)
+            pdf.cell(45, 6, f"({baht_text_str})", 0, 1, 'L')
 
             # --- SIGNATURES ---
-            # *แก้ไข:* ดันลงต่ำสุด (Bottom Align) แต่ไม่ตกขอบ A4
-            # A4 สูง 297mm, Margin ล่าง 15mm => พื้นที่จบที่ 282mm
-            # ความสูงบล็อกลายเซ็นประมาณ 25-30mm
-            # ดังนั้น set_y ควรอยู่ที่ประมาณ -35 ถึง -40
-            
             pdf.set_y(-35) 
             pdf.set_font(use_f, '', 13)
             
