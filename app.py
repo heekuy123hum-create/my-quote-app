@@ -11,13 +11,14 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
+from bahttext import bahttext  # <--- IMPORT LIBRARY BAHTTEXT
 
 # ==========================================
 # 1. SYSTEM CONFIG & ASSETS
 # ==========================================
 st.set_page_config(page_title="SIWAKIT TRADING SYSTEM", layout="wide", page_icon="🏢")
 
-# --- CSS ตกแต่ง UI (แก้ไขเรื่อง Tab มองไม่เห็นตัวหนังสือ) ---
+# --- CSS ตกแต่ง UI ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;600&display=swap');
@@ -105,7 +106,7 @@ st.markdown("""
         text-shadow: 2px 2px 0px rgba(255,255,255,1);
     }
     
-    /* Tab Styling (จุดที่แก้ไข) */
+    /* Tab Styling */
     .stTabs [data-baseweb="tab-list"] {
         gap: 10px;
     }
@@ -117,7 +118,7 @@ st.markdown("""
         border: 1px solid #e2e8f0;
         border-bottom: none;
         padding: 0 20px;
-        color: #334155; /* เพิ่มบรรทัดนี้: บังคับให้ตัวหนังสือสีเข้ม จะได้มองเห็นบนพื้นขาว */
+        color: #334155; 
     }
     .stTabs [aria-selected="true"] {
         background-color: #fff;
@@ -138,7 +139,6 @@ def load_lottieurl(url: str):
     except:
         return None
 
-# โหลด Animation
 lottie_office = load_lottieurl("https://lottie.host/5a8b7928-8924-4069-950c-1123533866b1/0XgV0lK1uF.json")
 lottie_success = load_lottieurl("https://assets9.lottiefiles.com/packages/lf20_ttv8K8.json")
 
@@ -151,7 +151,7 @@ FONT_PATH = "THSarabunNew.ttf"
 # เริ่มต้นตัวแปร Session State
 if "grid_df" not in st.session_state:
     st.session_state.grid_df = pd.DataFrame(
-        [{"รหัสสินค้า": "", "รายการ": "", "จำนวน": 0.0, "หน่วย": "", "ราคา": 0.0, "ส่วนลด": 0.0}] * 15
+        [{"รหัสสินค้า": "", "รายการ": "", "จำนวน": 0, "หน่วย": "", "ราคา": 0, "ส่วนลด": 0}] * 15
     )
 if "generated_pdf_bytes" not in st.session_state:
     st.session_state.generated_pdf_bytes = None
@@ -159,7 +159,7 @@ if "last_doc_no" not in st.session_state:
     st.session_state.last_doc_no = ""
 
 # ==========================================
-# 2. EMAIL SYSTEM FUNCTION (คงเดิม)
+# 2. EMAIL SYSTEM FUNCTION
 # ==========================================
 def send_email_with_attachment(sender_email, sender_password, receiver_email, subject, body, file_bytes, filename):
     try:
@@ -169,14 +169,12 @@ def send_email_with_attachment(sender_email, sender_password, receiver_email, su
         msg['Subject'] = subject
         msg.attach(MIMEText(body, 'plain'))
 
-        # Attach PDF
         part = MIMEBase('application', 'octet-stream')
         part.set_payload(file_bytes)
         encoders.encode_base64(part)
         part.add_header('Content-Disposition', f"attachment; filename= {filename}")
         msg.attach(part)
 
-        # SMTP Server (Default Gmail)
         server = smtplib.SMTP('smtp.gmail.com', 587)
         server.starttls()
         server.login(sender_email, sender_password)
@@ -188,7 +186,7 @@ def send_email_with_attachment(sender_email, sender_password, receiver_email, su
         return False, f"เกิดข้อผิดพลาด: {str(e)}"
 
 # ==========================================
-# 3. DATABASE MANAGEMENT (คงเดิม)
+# 3. DATABASE & LOGIC MANAGEMENT
 # ==========================================
 def load_data():
     # --- 1. โหลดข้อมูลลูกค้า ---
@@ -201,7 +199,6 @@ def load_data():
             except:
                 st.session_state.db_customers = pd.DataFrame(columns=["ลบ", "รหัส", "ชื่อบริษัท", "ผู้ติดต่อ", "ที่อยู่", "โทร", "แฟกซ์"])
         else:
-            # ตัวอย่างข้อมูล
             st.session_state.db_customers = pd.DataFrame([
                 {"ลบ": False, "รหัส": "C001", "ชื่อบริษัท": "ลูกค้าทั่วไป (เงินสด)", "ผู้ติดต่อ": "-", "ที่อยู่": "-", "โทร": "-", "แฟกซ์": "-"}
             ])
@@ -223,7 +220,7 @@ def load_data():
                 st.session_state.db_products = pd.DataFrame(columns=["ลบ", "รหัสสินค้า", "รายการ", "ราคา", "หน่วย"])
         else:
             st.session_state.db_products = pd.DataFrame([
-                {"ลบ": False, "รหัสสินค้า": "P001", "รายการ": "สินค้าตัวอย่าง", "ราคา": 1000.0, "หน่วย": "ชิ้น"}
+                {"ลบ": False, "รหัสสินค้า": "P001", "รายการ": "สินค้าตัวอย่าง", "ราคา": 1000, "หน่วย": "ชิ้น"}
             ])
         
         if 'ลบ' not in st.session_state.db_products.columns:
@@ -256,24 +253,59 @@ def save_data(df, filename, key_col=None):
     df_to_save.to_csv(filename, index=False, encoding='utf-8-sig')
     return df_to_save
 
-def to_num(val):
+def to_int(val):
     try:
         if isinstance(val, str): val = val.replace(',', '')
-        return float(val) if val is not None else 0.0
+        return int(round(float(val))) if val is not None else 0
     except:
-        return 0.0
+        return 0
+
+# --- Function Auto-Increment Doc No ---
+def generate_doc_no():
+    # 1. สร้าง Prefix ของวันนี้
+    today_str = datetime.now().strftime('%Y%m%d')
+    prefix = f"QT-{today_str}"
+    
+    # 2. ถ้าไม่มีประวัติเลย ให้เริ่มที่ 001
+    if st.session_state.db_history.empty:
+        return f"{prefix}-001"
+    
+    # 3. ค้นหาเอกสารที่มี Prefix เดียวกันในประวัติ
+    # แปลงคอลัมน์ doc_no เป็น string ให้แน่ใจ
+    hist_df = st.session_state.db_history.copy()
+    hist_df['doc_no'] = hist_df['doc_no'].astype(str)
+    
+    matched_docs = hist_df[hist_df['doc_no'].str.contains(prefix, na=False)]
+    
+    if matched_docs.empty:
+        return f"{prefix}-001"
+    
+    # 4. หาเลขรันสูงสุดแล้วบวก 1
+    max_run = 0
+    for doc in matched_docs['doc_no']:
+        try:
+            # สมมติ format คือ QT-YYYYMMDD-XXX
+            parts = doc.split('-')
+            if len(parts) >= 3:
+                run_num = int(parts[-1])
+                if run_num > max_run:
+                    max_run = run_num
+        except:
+            pass
+            
+    return f"{prefix}-{max_run + 1:03d}"
 
 load_data()
 
 # ==========================================
-# 4. PDF ENGINE (คงเดิม ตามสั่ง)
+# 4. PDF ENGINE (แก้ไขตามสั่ง: ตัดทศนิยม + BahtText + Multi-Page)
 # ==========================================
 def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line):
     pdf = FPDF(unit='mm', format='A4')
     pdf.set_margins(15, 15, 15)
     pdf.set_auto_page_break(auto=False)
-    pdf.add_page()
     
+    # Prepare Font
     if os.path.exists(FONT_PATH):
         pdf.add_font('THSarabun', '', FONT_PATH, uni=True)
         pdf.add_font('THSarabun', 'B', FONT_PATH, uni=True)
@@ -281,156 +313,199 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line):
     else:
         use_f = 'Arial'
 
-    # Header
-    for ext in ['png', 'jpg', 'jpeg']:
-        if os.path.exists(f"logo.{ext}"):
-            pdf.image(f"logo.{ext}", x=15, y=10, w=25)
-            break
-            
-    pdf.set_xy(45, 10)
-    pdf.set_font(use_f, 'B', 18)
-    pdf.cell(0, 8, f"{d['my_comp']}", 0, 1, 'L')
-    
-    pdf.set_x(45)
-    pdf.set_font(use_f, '', 14)
-    pdf.multi_cell(100, 6, f"{d['my_addr']}\nโทร: {d['my_tel']} แฟกซ์: {d['my_fax']}\nเลขผู้เสียภาษี: {d['my_tax']}", 0, 'L')
-
-    # Doc No Box
-    pdf.set_xy(140, 10)
-    pdf.set_font(use_f, 'B', 14)
-    pdf.cell(55, 20, "", 1, 0)
-    pdf.set_xy(142, 13)
-    pdf.cell(50, 6, f"เลขที่: {d['doc_no']}", 0, 1, 'L')
-    pdf.set_x(142)
-    pdf.cell(50, 6, f"วันที่: {d['doc_date']}", 0, 1, 'L')
-
-    # Title
-    pdf.set_y(45)
-    pdf.set_font(use_f, 'B', 26)
-    pdf.cell(0, 10, "ใบเสนอราคา (QUOTATION)", 0, 1, 'C')
-
-    # Customer Info
-    pdf.set_y(60)
-    start_y = pdf.get_y()
-    
-    pdf.set_font(use_f, 'B', 14)
-    pdf.cell(20, 7, "ลูกค้า:", 0, 0)
-    pdf.set_font(use_f, '', 14)
-    pdf.cell(0, 7, f"{d['c_name']}", 0, 1)
-    
-    pdf.set_x(15)
-    pdf.set_font(use_f, 'B', 14)
-    pdf.cell(20, 7, "ผู้ติดต่อ:", 0, 0)
-    pdf.set_font(use_f, '', 14)
-    pdf.cell(0, 7, f"{d['contact']}", 0, 1)
-    
-    pdf.set_x(15)
-    pdf.multi_cell(110, 6, f"ที่อยู่: {d['c_addr']}\nโทร: {d['c_tel']} แฟกซ์: {d['c_fax']}", 0, 'L')
-    
-    pdf.set_xy(135, start_y)
-    pdf.multi_cell(65, 7, 
-        f"กำหนดส่ง: {d['due_date']}\n"
-        f"ยืนราคา: {d['valid_days']} วัน\n"
-        f"เครดิต: {d['credit']} วัน\n"
-        f"ครบกำหนด: {d['exp_date']}", 
-        0, 'L')
-
-    # Table
-    MAX_ROWS = 15 
-    pdf.set_y(95)
-    cols_w = [12, 73, 15, 15, 25, 15, 25] 
-    headers = ["ลำดับ", "รายการสินค้า", "จำนวน", "หน่วย", "ราคา/หน่วย", "ส่วนลด", "จำนวนเงิน"]
-    
-    pdf.set_fill_color(240, 240, 240)
-    pdf.set_font(use_f, 'B', 13)
-    for i, h in enumerate(headers):
-        pdf.cell(cols_w[i], 9, h, 1, 0, 'C', True)
-    pdf.ln()
-
-    pdf.set_font(use_f, '', 13)
-    row_height = 8 
-    
+    # --- Prepare Data for Pagination ---
+    # Filter only valid items
     valid_items = items_df[items_df['รายการ'].str.strip() != ""].copy()
     
-    for i in range(MAX_ROWS):
-        if i < len(valid_items):
-            row = valid_items.iloc[i]
-            q = to_num(row.get('จำนวน'))
-            p = to_num(row.get('ราคา'))
-            dis = to_num(row.get('ส่วนลด'))
-            total = (q * p) - dis
-            
-            vals = [
-                str(i+1),
-                str(row.get('รายการ')),
-                f"{q:,.0f}",
-                str(row.get('หน่วย')),
-                f"{p:,.2f}",
-                f"{dis:,.2f}" if dis > 0 else "-",
-                f"{total:,.2f}"
-            ]
-        else:
-            vals = ["", "", "", "", "", "", ""]
+    # Constants
+    MAX_ROWS_PER_PAGE = 15
+    total_items = len(valid_items)
+    
+    # Calculate pages needed (at least 1 page)
+    import math
+    num_pages = math.ceil(total_items / MAX_ROWS_PER_PAGE)
+    if num_pages == 0: num_pages = 1
+    
+    # Loop generate pages
+    for page in range(num_pages):
+        pdf.add_page()
         
-        for j, txt in enumerate(vals):
-            align = 'C'
-            if j == 1: align = 'L'
-            if j >= 4 and txt not in ["", "-"]: align = 'R'
-            pdf.cell(cols_w[j], row_height, txt, 1, 0, align)
+        # --- HEADER (Draw on every page) ---
+        # Logo
+        for ext in ['png', 'jpg', 'jpeg']:
+            if os.path.exists(f"logo.{ext}"):
+                pdf.image(f"logo.{ext}", x=15, y=10, w=25)
+                break
+                
+        pdf.set_xy(45, 10)
+        pdf.set_font(use_f, 'B', 18)
+        pdf.cell(0, 8, f"{d['my_comp']}", 0, 1, 'L')
+        
+        pdf.set_x(45)
+        pdf.set_font(use_f, '', 14)
+        pdf.multi_cell(100, 6, f"{d['my_addr']}\nโทร: {d['my_tel']} แฟกซ์: {d['my_fax']}\nเลขผู้เสียภาษี: {d['my_tax']}", 0, 'L')
+
+        # Doc No Box
+        pdf.set_xy(140, 10)
+        pdf.set_font(use_f, 'B', 14)
+        pdf.cell(55, 20, "", 1, 0)
+        pdf.set_xy(142, 13)
+        pdf.cell(50, 6, f"เลขที่: {d['doc_no']}", 0, 1, 'L')
+        pdf.set_x(142)
+        pdf.cell(50, 6, f"วันที่: {d['doc_date']}", 0, 1, 'L')
+        # Show Page No
+        pdf.set_xy(142, 25)
+        pdf.set_font(use_f, '', 12)
+        pdf.cell(50, 4, f"หน้า {page+1} / {num_pages}", 0, 1, 'R')
+
+        # Title
+        pdf.set_y(45)
+        pdf.set_font(use_f, 'B', 26)
+        pdf.cell(0, 10, "ใบเสนอราคา (QUOTATION)", 0, 1, 'C')
+
+        # Customer Info
+        pdf.set_y(60)
+        start_y = pdf.get_y()
+        
+        pdf.set_font(use_f, 'B', 14)
+        pdf.cell(20, 7, "ลูกค้า:", 0, 0)
+        pdf.set_font(use_f, '', 14)
+        pdf.cell(0, 7, f"{d['c_name']}", 0, 1)
+        
+        pdf.set_x(15)
+        pdf.set_font(use_f, 'B', 14)
+        pdf.cell(20, 7, "ผู้ติดต่อ:", 0, 0)
+        pdf.set_font(use_f, '', 14)
+        pdf.cell(0, 7, f"{d['contact']}", 0, 1)
+        
+        pdf.set_x(15)
+        pdf.multi_cell(110, 6, f"ที่อยู่: {d['c_addr']}\nโทร: {d['c_tel']} แฟกซ์: {d['c_fax']}", 0, 'L')
+        
+        pdf.set_xy(135, start_y)
+        pdf.multi_cell(65, 7, 
+            f"กำหนดส่ง: {d['due_date']}\n"
+            f"ยืนราคา: {d['valid_days']} วัน\n"
+            f"เครดิต: {d['credit']} วัน\n"
+            f"ครบกำหนด: {d['exp_date']}", 
+            0, 'L')
+
+        # --- TABLE ---
+        pdf.set_y(95)
+        cols_w = [12, 73, 15, 15, 25, 15, 25] 
+        headers = ["ลำดับ", "รายการสินค้า", "จำนวน", "หน่วย", "ราคา/หน่วย", "ส่วนลด", "จำนวนเงิน"]
+        
+        pdf.set_fill_color(240, 240, 240)
+        pdf.set_font(use_f, 'B', 13)
+        for i, h in enumerate(headers):
+            pdf.cell(cols_w[i], 9, h, 1, 0, 'C', True)
         pdf.ln()
 
-    # Summary
-    pdf.ln(5)
-    current_y = pdf.get_y()
-    
-    pdf.set_xy(15, current_y)
-    pdf.set_font(use_f, 'B', 14)
-    pdf.cell(0, 7, "หมายเหตุ / Remarks:", 0, 1)
-    pdf.set_font(use_f, '', 13)
-    pdf.multi_cell(100, 5, remark_text, 0, 'L')
-    
-    sum_x_label = 135
-    sum_x_val = 175
-    sum_y = current_y
-    
-    def print_sum_row(label, value, bold=False, line=False):
-        nonlocal sum_y
-        pdf.set_xy(sum_x_label, sum_y)
-        pdf.set_font(use_f, 'B' if bold else '', 13)
-        pdf.cell(40, 6, label, 0, 0, 'R')
-        pdf.set_xy(sum_x_val, sum_y)
-        pdf.cell(25, 6, f"{value:,.2f}", 'B' if line else 0, 1, 'R')
-        sum_y += 6
-
-    print_sum_row("รวมเงินสินค้า:", summary['gross'])
-    print_sum_row("หักส่วนลด:", summary['discount'])
-    print_sum_row("ยอดหลังหักส่วนลด:", summary['subtotal'])
-    
-    if show_vat_line:
-        print_sum_row("ภาษีมูลค่าเพิ่ม 7%:", summary['vat'])
+        pdf.set_font(use_f, '', 13)
+        row_height = 8 
         
-    print_sum_row("ยอดรวมทั้งสิ้น:", summary['grand_total'], True, True)
+        # Slice items for this page
+        start_idx = page * MAX_ROWS_PER_PAGE
+        end_idx = start_idx + MAX_ROWS_PER_PAGE
+        page_items = valid_items.iloc[start_idx:end_idx]
+        
+        # Loop items for this page (Fill empty rows if it's the last page to keep format)
+        # Note: If not last page, just print items. If last page, fill to MAX_ROWS.
+        
+        rows_to_print = MAX_ROWS_PER_PAGE # Force full height table for consistency
+        
+        for i in range(rows_to_print):
+            # Calculate actual item index
+            current_item_idx = start_idx + i
+            
+            if i < len(page_items):
+                row = page_items.iloc[i]
+                q = to_int(row.get('จำนวน'))
+                p = to_int(row.get('ราคา'))
+                dis = to_int(row.get('ส่วนลด'))
+                total = int(round((q * p) - dis))
+                
+                vals = [
+                    str(current_item_idx + 1),
+                    str(row.get('รายการ')),
+                    f"{q:,.0f}",
+                    str(row.get('หน่วย')),
+                    f"{p:,.0f}",
+                    f"{dis:,.0f}" if dis > 0 else "-",
+                    f"{total:,.0f}"
+                ]
+            else:
+                vals = ["", "", "", "", "", "", ""]
+            
+            for j, txt in enumerate(vals):
+                align = 'C'
+                if j == 1: align = 'L'
+                if j >= 4 and txt not in ["", "-"]: align = 'R'
+                pdf.cell(cols_w[j], row_height, txt, 1, 0, align)
+            pdf.ln()
 
-    # Signatures
-    pdf.set_y(-25) 
-    pdf.set_font(use_f, '', 13)
-    
-    sig_labels = ["ผู้สั่งซื้อสินค้า", "พนักงานขาย", "ผู้อนุมัติ"]
-    names = [sigs['s1'], sigs['s2'], sigs['s3']]
-    x_positions = [20, 85, 150]
-    
-    y_sig = pdf.get_y()
-    
-    for i in range(3):
-        pdf.set_xy(x_positions[i], y_sig)
-        pdf.cell(40, 6, "........................................", 0, 1, 'C')
-        pdf.set_xy(x_positions[i], y_sig + 6)
-        pdf.cell(40, 6, sig_labels[i], 0, 1, 'C')
-        pdf.set_xy(x_positions[i], y_sig + 12)
-        disp = f"({names[i]})" if names[i] else "(........................................)"
-        pdf.cell(40, 6, disp, 0, 1, 'C')
-        pdf.set_xy(x_positions[i], y_sig + 18)
-        pdf.cell(40, 6, "วันที่ ...../...../..........", 0, 1, 'C')
+        # --- SUMMARY (Only on Last Page) ---
+        if page == num_pages - 1:
+            pdf.ln(5)
+            current_y = pdf.get_y()
+            
+            # ** BAHT TEXT SECTION **
+            grand_total_val = summary['grand_total']
+            baht_text_str = bahttext(grand_total_val)
+            
+            pdf.set_xy(15, current_y)
+            pdf.set_font(use_f, 'B', 14)
+            pdf.cell(0, 8, f"จำนวนเงินตัวอักษร: ({baht_text_str})", 0, 1, 'L')
+            current_y = pdf.get_y() + 2 # Move down a bit
+            
+            pdf.set_xy(15, current_y)
+            pdf.set_font(use_f, 'B', 14)
+            pdf.cell(0, 7, "หมายเหตุ / Remarks:", 0, 1)
+            pdf.set_font(use_f, '', 13)
+            pdf.multi_cell(100, 5, remark_text, 0, 'L')
+            
+            sum_x_label = 135
+            sum_x_val = 175
+            sum_y = current_y
+            
+            def print_sum_row(label, value, bold=False, line=False):
+                nonlocal sum_y
+                pdf.set_xy(sum_x_label, sum_y)
+                pdf.set_font(use_f, 'B' if bold else '', 13)
+                pdf.cell(40, 6, label, 0, 0, 'R')
+                pdf.set_xy(sum_x_val, sum_y)
+                # FORMAT AS INTEGER HERE
+                pdf.cell(25, 6, f"{value:,.0f}", 'B' if line else 0, 1, 'R')
+                sum_y += 6
+
+            print_sum_row("รวมเงินสินค้า:", summary['gross'])
+            print_sum_row("หักส่วนลด:", summary['discount'])
+            print_sum_row("ยอดหลังหักส่วนลด:", summary['subtotal'])
+            
+            if show_vat_line:
+                print_sum_row("ภาษีมูลค่าเพิ่ม 7%:", summary['vat'])
+                
+            print_sum_row("ยอดรวมทั้งสิ้น:", summary['grand_total'], True, True)
+
+            # Signatures
+            pdf.set_y(-35) 
+            pdf.set_font(use_f, '', 13)
+            
+            sig_labels = ["ผู้สั่งซื้อสินค้า", "พนักงานขาย", "ผู้อนุมัติ"]
+            names = [sigs['s1'], sigs['s2'], sigs['s3']]
+            x_positions = [20, 85, 150]
+            
+            y_sig = pdf.get_y()
+            
+            for i in range(3):
+                pdf.set_xy(x_positions[i], y_sig)
+                pdf.cell(40, 6, "........................................", 0, 1, 'C')
+                pdf.set_xy(x_positions[i], y_sig + 6)
+                pdf.cell(40, 6, sig_labels[i], 0, 1, 'C')
+                pdf.set_xy(x_positions[i], y_sig + 12)
+                disp = f"({names[i]})" if names[i] else "(........................................)"
+                pdf.cell(40, 6, disp, 0, 1, 'C')
+                pdf.set_xy(x_positions[i], y_sig + 18)
+                pdf.cell(40, 6, "วันที่ ...../...../..........", 0, 1, 'C')
 
     return bytes(pdf.output())
 
@@ -438,12 +513,14 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line):
 # 5. USER INTERFACE
 # ==========================================
 def clear_all_data():
-    st.session_state.grid_df = pd.DataFrame([{"รหัสสินค้า": "", "รายการ": "", "จำนวน": 0.0, "หน่วย": "", "ราคา": 0.0, "ส่วนลด": 0.0}] * 15)
+    st.session_state.grid_df = pd.DataFrame([{"รหัสสินค้า": "", "รายการ": "", "จำนวน": 0, "หน่วย": "", "ราคา": 0, "ส่วนลด": 0}] * 15)
     reset_keys = ["c_name_in", "contact_in", "c_addr_in", "c_tel_in", "c_fax_in", "remark_in", "s1_in", "s2_in", "s3_in"]
     for k in reset_keys:
         if k in st.session_state: st.session_state[k] = ""
     st.session_state["cust_selector_tab1"] = "-- พิมพ์เอง --"
     st.session_state.generated_pdf_bytes = None
+    # Reset Doc No to new auto increment
+    st.session_state.doc_no_in = generate_doc_no() 
     st.toast("ล้างข้อมูลหน้าจอเรียบร้อย", icon="🗑️")
 
 def update_customer_fields():
@@ -502,13 +579,14 @@ with tab1:
             with col_s2:
                 st.text_input("ที่อยู่บริษัท", "123 ถนนตัวอย่าง กทม.", key="my_addr_in")
                 st.text_input("เลขผู้เสียภาษี", key="my_tax_in")
-                st.text_input("แฟกซ์", key="my_fax_in") # ย้ายแฟกซ์มาตรงนี้ให้สมดุล
+                st.text_input("แฟกซ์", key="my_fax_in") 
                 
         with c2:
             st.markdown("""<div style="background-color:#eff6ff; padding:15px; border-radius:10px;">""", unsafe_allow_html=True)
             dc1, dc2 = st.columns(2)
             with dc1:
-                st.text_input("เลขที่ใบเสนอราคา", f"QT-{datetime.now().strftime('%Y%m%d')}-001", key="doc_no_in")
+                # ใช้ Function generate_doc_no() เป็นค่า default
+                st.text_input("เลขที่ใบเสนอราคา", value=generate_doc_no(), key="doc_no_in")
                 st.text_input("ยืนราคา (วัน)", "30", key="valid_days_in")
             with dc2:
                 st.date_input("วันที่เอกสาร", date.today(), key="doc_date_in")
@@ -524,7 +602,7 @@ with tab1:
         with cust_h1: 
             st.markdown("##### 👤 ข้อมูลลูกค้า (Customer Details)")
         with cust_h2: 
-            # Dropdown เลือกลูกค้า (Logic เดิม)
+            # Dropdown เลือกลูกค้า
             opts = ["-- พิมพ์เอง --"] + st.session_state.db_customers['ชื่อบริษัท'].dropna().unique().tolist()
             st.selectbox("🔍 ค้นหาลูกค้าเก่า", opts, key="cust_selector_tab1", on_change=update_customer_fields, label_visibility="collapsed")
 
@@ -537,9 +615,9 @@ with tab1:
             st.text_input("ผู้ติดต่อ", key="contact_in", placeholder="ชื่อผู้ติดต่อ...")
             st.text_input("เบอร์โทรศัพท์", key="c_tel_in")
         with cc3:
-            st.write("") # Spacer
-            st.write("") # Spacer
-            st.write("") # Spacer (ดันลงมาให้ตรงกับ address)
+            st.write("") 
+            st.write("") 
+            st.write("") 
             st.text_input("เบอร์แฟกซ์", key="c_fax_in")
 
     # 3. Items Table
@@ -547,15 +625,15 @@ with tab1:
     
     prod_opts = st.session_state.db_products['รหัสสินค้า'].astype(str).unique().tolist()
     
-    # Logic เดิม 100%
     edited_df = st.data_editor(
         st.session_state.grid_df,
         column_config={
             "รหัสสินค้า": st.column_config.SelectboxColumn("รหัส", options=prod_opts, width="medium"),
             "รายการ": st.column_config.TextColumn("รายการสินค้า", width="large"),
-            "จำนวน": st.column_config.NumberColumn("จำนวน", min_value=0.0, format="%.0f"),
-            "ราคา": st.column_config.NumberColumn("ราคา", min_value=0.0, format="%.2f"),
-            "ส่วนลด": st.column_config.NumberColumn("ส่วนลด", min_value=0.0, format="%.2f")
+            # Format เป็นจำนวนเต็ม (%.0f)
+            "จำนวน": st.column_config.NumberColumn("จำนวน", min_value=0, format="%.0f"),
+            "ราคา": st.column_config.NumberColumn("ราคา", min_value=0, format="%.0f"),
+            "ส่วนลด": st.column_config.NumberColumn("ส่วนลด", min_value=0, format="%.0f")
         },
         num_rows="dynamic",
         use_container_width=True,
@@ -563,7 +641,7 @@ with tab1:
         key="editor_main"
     )
 
-    # Auto-fill Logic (คงเดิม)
+    # Auto-fill Logic
     needs_rerun = False
     for idx, row in edited_df.iterrows():
         code = str(row['รหัสสินค้า'])
@@ -572,7 +650,7 @@ with tab1:
             if str(row['รายการ']) != info['รายการ']:
                 edited_df.at[idx, 'รายการ'] = info['รายการ']
                 edited_df.at[idx, 'หน่วย'] = info['หน่วย']
-                edited_df.at[idx, 'ราคา'] = info['ราคา']
+                edited_df.at[idx, 'ราคา'] = int(info['ราคา']) # cast to int
                 needs_rerun = True
     
     if needs_rerun:
@@ -581,16 +659,17 @@ with tab1:
     else:
         st.session_state.grid_df = edited_df
 
-    # Calculation Logic
+    # Calculation Logic (Integer Version)
     calc_df = edited_df.copy()
-    calc_df['q'] = calc_df['จำนวน'].apply(to_num)
-    calc_df['p'] = calc_df['ราคา'].apply(to_num)
-    calc_df['d'] = calc_df['ส่วนลด'].apply(to_num)
-    calc_df['total'] = (calc_df['q'] * calc_df['p']) - calc_df['d']
+    calc_df['q'] = calc_df['จำนวน'].apply(to_int)
+    calc_df['p'] = calc_df['ราคา'].apply(to_int)
+    calc_df['d'] = calc_df['ส่วนลด'].apply(to_int)
+    # คำนวณทีละบรรทัดปัดเป็น int ทันที
+    calc_df['total'] = calc_df.apply(lambda x: int(round((x['q'] * x['p']) - x['d'])), axis=1)
     
-    sum_gross = (calc_df['q'] * calc_df['p']).sum()
-    sum_disc = calc_df['d'].sum()
-    sum_sub = calc_df['total'].sum()
+    sum_gross = int((calc_df['q'] * calc_df['p']).sum())
+    sum_disc = int(calc_df['d'].sum())
+    sum_sub = int(calc_df['total'].sum())
 
     st.write("---")
 
@@ -610,21 +689,26 @@ with tab1:
     with f_col2:
         # Grand Total Card
         has_vat = st.checkbox("คำนวณ VAT 7%", value=True)
-        vat_val = sum_sub * 0.07 if has_vat else 0.0
+        # คำนวณ VAT แล้วปัดเป็น int
+        vat_val = int(round(sum_sub * 0.07)) if has_vat else 0
         grand_total = sum_sub + vat_val
+        
+        # แปลงเป็นตัวหนังสือไทยเพื่อโชว์หน้าจอ (Optional)
+        baht_text_show = bahttext(grand_total)
         
         vat_style = "" if has_vat else "display: none;"
         
         st.markdown(f"""
         <div class="metric-card">
             <div class="metric-label">ยอดรวมทั้งสิ้น (Grand Total)</div>
-            <div class="metric-value">{grand_total:,.2f}</div>
+            <div class="metric-value">{grand_total:,.0f}</div>
+            <div style="font-size: 0.8rem; color: #166534; opacity: 0.8; margin-bottom:10px;">{baht_text_show}</div>
             <div style="margin-top: 15px; font-size: 0.9rem; color: #555; text-align: right; border-top: 1px dashed #ccc; padding-top:10px;">
                 <table style="width: 100%;">
-                    <tr><td style="text-align: left; color:#666;">รวมสินค้า:</td><td style="text-align: right;">{sum_gross:,.2f}</td></tr>
-                    <tr><td style="text-align: left; color:#666;">ส่วนลด:</td><td style="text-align: right; color: #dc2626;">-{sum_disc:,.2f}</td></tr>
-                    <tr><td style="text-align: left; font-weight: 600;">ก่อนภาษี:</td><td style="text-align: right; font-weight: 600;">{sum_sub:,.2f}</td></tr>
-                    <tr style="{vat_style}"><td style="text-align: left; color:#666;">VAT 7%:</td><td style="text-align: right;">{vat_val:,.2f}</td></tr>
+                    <tr><td style="text-align: left; color:#666;">รวมสินค้า:</td><td style="text-align: right;">{sum_gross:,.0f}</td></tr>
+                    <tr><td style="text-align: left; color:#666;">ส่วนลด:</td><td style="text-align: right; color: #dc2626;">-{sum_disc:,.0f}</td></tr>
+                    <tr><td style="text-align: left; font-weight: 600;">ก่อนภาษี:</td><td style="text-align: right; font-weight: 600;">{sum_sub:,.0f}</td></tr>
+                    <tr style="{vat_style}"><td style="text-align: left; color:#666;">VAT 7%:</td><td style="text-align: right;">{vat_val:,.0f}</td></tr>
                 </table>
             </div>
         </div>
@@ -638,7 +722,7 @@ with tab1:
         st.button("🧹 ล้างหน้าจอ", on_click=clear_all_data, use_container_width=True)
     with b2:
         if st.button("🚀 บันทึกและพิมพ์ PDF", type="primary", use_container_width=True):
-            # 1. Save History (Logic คงเดิม)
+            # 1. Save History
             doc_no = st.session_state.doc_no_in
             json_data = {
                 "grid_df": edited_df.to_dict(),
@@ -668,7 +752,7 @@ with tab1:
             st.session_state.db_history = pd.concat([pd.DataFrame([new_rec]), st.session_state.db_history], ignore_index=True)
             save_data(st.session_state.db_history, HISTORY_FILE)
             
-            # 2. Create PDF (Logic คงเดิม)
+            # 2. Create PDF
             pdf_data = {
                 "my_comp": st.session_state.my_comp_in, "my_addr": st.session_state.my_addr_in,
                 "my_tel": st.session_state.my_tel_in, "my_fax": st.session_state.my_fax_in, "my_tax": st.session_state.my_tax_in,
@@ -740,7 +824,7 @@ with tab1:
                                 st.error(f"❌ {msg}")
 
 # ------------------------------------------------------------------
-# TAB 2: ลูกค้า (Logic เดิม 100% ห้ามยุ่ง) -> แค่ใส่ Container ให้ดูดี
+# TAB 2: ลูกค้า (Logic เดิม)
 # ------------------------------------------------------------------
 with tab2:
     with st.container(border=True):
@@ -767,27 +851,27 @@ with tab2:
             st.rerun()
 
 # ------------------------------------------------------------------
-# TAB 3: สินค้า (Logic เดิม 100% ห้ามยุ่ง) -> แค่ใส่ Container ให้ดูดี
+# TAB 3: สินค้า (Logic เดิม)
 # ------------------------------------------------------------------
 with tab3:
     with st.container(border=True):
         st.subheader("📦 จัดการฐานข้อมูลสินค้า")
         st.info("💡 วิธีใช้: แก้ไขข้อมูลในตาราง หรือติ๊ก 'ลบ' แล้วกดปุ่มบันทึกด้านล่าง (ปุ่มเดียวจบ)")
-        
+
         edited_products = st.data_editor(
-            st.session_state.db_products, 
-            num_rows="dynamic", 
-            use_container_width=True, 
-            hide_index=True, 
+            st.session_state.db_products,
+            num_rows="dynamic",
+            use_container_width=True,
+            hide_index=True,
             column_config={
                 "ลบ": st.column_config.CheckboxColumn("ลบ (ติ๊กเพื่อลบ)", default=False, width="small"),
-                "รหัสสินค้า": st.column_config.TextColumn("รหัส", width="small", required=True),
+                "รหัสสินค้า": st.column_config.TextColumn("รหัสสินค้า", width="medium"),
                 "รายการ": st.column_config.TextColumn("รายการสินค้า", width="large"),
-                "ราคา": st.column_config.NumberColumn("ราคา", format="%.2f"),
+                "ราคา": st.column_config.NumberColumn("ราคา", format="%.0f"), # int
             },
             key="prod_editor_v2"
         )
-        
+
         if st.button("💾 บันทึกการเปลี่ยนแปลง (สินค้า)", type="primary", use_container_width=True):
             saved_df = save_data(edited_products, PROD_FILE, key_col="รหัสสินค้า")
             st.session_state.db_products = saved_df
@@ -795,56 +879,19 @@ with tab3:
             st.rerun()
 
 # ------------------------------------------------------------------
-# TAB 4: ประวัติ (Logic เดิม 100% ห้ามยุ่ง)
+# TAB 4: ประวัติ (Logic เดิม)
 # ------------------------------------------------------------------
 with tab4:
     with st.container(border=True):
-        st.subheader("🗂️ ประวัติใบเสนอราคา")
-        
-        if not st.session_state.db_history.empty:
-            c_hist1, c_hist2 = st.columns([0.7, 0.3])
-            with c_hist1:
-                sel_hist = st.selectbox("เลือกเอกสารเพื่อแก้ไข", st.session_state.db_history['doc_no'].tolist())
-            with c_hist2:
-                if st.button("🔄 โหลดข้อมูลกลับหน้าแรก", use_container_width=True):
-                    row = st.session_state.db_history[st.session_state.db_history['doc_no'] == sel_hist].iloc[0]
-                    data = json.loads(row['data_json'])
-                    
-                    st.session_state.grid_df = pd.DataFrame.from_dict(data['grid_df'])
-                    st.session_state.c_name_in = data.get('c_name', '')
-                    st.session_state.contact_in = data.get('contact', '')
-                    st.session_state.c_addr_in = data.get('c_addr', '')
-                    st.session_state.c_tel_in = data.get('c_tel', '')
-                    st.session_state.c_fax_in = data.get('c_fax_in', '') # Added compat
-                    st.session_state.remark_in = data.get('remark', '')
-                    st.session_state.doc_no_in = row['doc_no']
-                    
-                    if 'doc_date_str' in data:
-                        try: st.session_state.doc_date_in = datetime.strptime(data['doc_date_str'], '%Y-%m-%d').date()
-                        except: pass
-                    
-                    st.toast(f"โหลดข้อมูล {sel_hist} เรียบร้อย ไปที่ Tab 1 ได้เลย", icon="🔄")
-            
-            st.divider()
-            
-            edited_hist = st.data_editor(
-                st.session_state.db_history,
-                use_container_width=True,
-                hide_index=True,
-                column_config={
-                    "ลบ": st.column_config.CheckboxColumn("ลบ (ติ๊กเพื่อลบ)", default=False),
-                    "timestamp": st.column_config.TextColumn("เวลาบันทึก", disabled=True),
-                    "doc_no": st.column_config.TextColumn("เลขที่", disabled=True),
-                    "total": st.column_config.NumberColumn("ยอดรวม", format="%.2f", disabled=True),
-                    "data_json": None
-                },
-                key="hist_editor"
-            )
-            
-            if st.button("💾 อัปเดตประวัติ", type="primary", use_container_width=True):
-                saved_hist = save_data(edited_hist, HISTORY_FILE)
-                st.session_state.db_history = saved_hist
-                st.toast("✅ อัปเดตประวัติเรียบร้อย", icon="💾")
-                st.rerun()
-        else:
-            st.info("ยังไม่มีประวัติ")
+        st.subheader("🗂️ ประวัติเอกสาร")
+        st.dataframe(
+            st.session_state.db_history.sort_values(by="timestamp", ascending=False),
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "timestamp": st.column_config.DatetimeColumn("เวลาบันทึก", format="D/M/Y H:m"),
+                "total": st.column_config.NumberColumn("ยอดรวม", format="%.0f"), # int
+                "data_json": st.column_config.Column("JSON Data", help="ข้อมูลดิบ"),
+                "ลบ": st.column_config.CheckboxColumn("ลบ", default=False)
+            }
+        )
