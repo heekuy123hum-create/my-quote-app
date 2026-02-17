@@ -399,8 +399,9 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line):
             f"ครบกำหนด: {d['exp_date']}", 
             0, 'L')
 
-        # --- TABLE (MOVED UP FROM 95 TO 82) ---
-        pdf.set_y(82)
+        # --- TABLE ---
+        # แก้ไข: ขยับลงมาที่ 90 เพื่อไม่ให้ทับข้อมูลแฟกซ์ แต่สูงกว่าเดิม(95)
+        pdf.set_y(90)
         cols_w = [12, 73, 15, 15, 25, 15, 25] 
         headers = ["ลำดับ", "รายการสินค้า", "จำนวน", "หน่วย", "ราคา/หน่วย", "ส่วนลด", "จำนวนเงิน"]
         
@@ -460,8 +461,9 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line):
             pdf.multi_cell(90, 5, remark_text, 0, 'L')
             
             # --- ส่วนตัวเลขสรุป (อยู่ขวา) ---
-            sum_x_label = 135
-            sum_x_val = 175
+            # แก้ไข: ขยับ X ให้ Label กับ Value อยู่ใกล้กันมากขึ้น ไม่แยกขาด
+            sum_x_label = 130 # เดิม 135
+            sum_x_val = 170   # เดิม 175
             sum_y = current_y
             
             def print_sum_row(label, value, bold=False, line=False):
@@ -480,22 +482,28 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line):
             if show_vat_line:
                 print_sum_row("ภาษีมูลค่าเพิ่ม 7%:", summary['vat'])
                 
-            # *แก้ไข:* # 1. เอาการเว้นระยะออก (sum_y += 2)
-            # 2. จัดยอดรวมทั้งสิ้นและภาษาไทยให้อยู่ในโซนเดียวกัน ฝั่งขวา (Summary Column)
-            # 3. ทั้งคู่ชิดซ้ายของโซนนั้น (Left Aligned) และอยู่บรรทัดเดียวกัน
+            # *แก้ไขจุดใหญ่*: 
+            # 1. ไม่แยก Label กับ Value ออกจากกัน
+            # 2. เอา ยอดรวมสุทธิ + ตัวหนังสือภาษาไทย มาอยู่บรรทัดเดียวกัน
+            # 3. ชิดขวา (Right Align) ตามสั่ง
             
             grand_total_val = summary['grand_total']
             baht_text_str = bahttext(grand_total_val)
-
-            # ใช้ตำแหน่งเริ่มต้นที่ 105 (ซ้ายสุดของโซนสรุป) เพื่อให้มีพื้นที่สำหรับข้อความยาวๆ
-            pdf.set_xy(105, sum_y)
-            pdf.set_font(use_f, 'B', 13) 
             
-            # ยอดรวม (ชิดซ้ายของโซนนี้)
-            pdf.cell(50, 6, f"รวมสุทธิ: {grand_total_val:,.2f}", 0, 0, 'L')
+            # ขยับลงมา 1 step เหมือนบรรทัดอื่นๆ
             
-            # ตัวหนังสือ (ชิดซ้ายของโซนนี้ ถัดจากยอดรวม)
-            pdf.cell(45, 6, f"({baht_text_str})", 0, 1, 'L')
+            pdf.set_xy(110, sum_y) # เริ่มต้น X ที่ไกลหน่อยเพื่อให้มีที่วางข้อความยาวๆ
+            pdf.set_font(use_f, 'B', 13)
+            
+            # พิมพ์ Label "ยอดรวมสุทธิ" (ชิดขวาของกล่องนี้)
+            pdf.cell(40, 6, "ยอดรวมสุทธิ:", 0, 0, 'R')
+            
+            # พิมพ์ Value + BahtText รวมกันในช่องถัดไป (ชิดขวาของหน้า)
+            # ใช้พื้นที่จาก 150 ถึง 195 (ประมาณ 45mm)
+            pdf.set_xy(150, sum_y)
+            # รวม string เข้าด้วยกัน
+            full_str = f"{grand_total_val:,.2f}  ({baht_text_str})"
+            pdf.cell(45, 6, full_str, 0, 1, 'R')
 
             # --- SIGNATURES ---
             pdf.set_y(-35) 
