@@ -159,6 +159,8 @@ if "last_doc_no" not in st.session_state:
     st.session_state.last_doc_no = ""
 if "convert_pdf_bytes" not in st.session_state:
     st.session_state.convert_pdf_bytes = None
+if "convert_filename" not in st.session_state:
+    st.session_state.convert_filename = ""
 
 # ==========================================
 # 2. EMAIL SYSTEM FUNCTION
@@ -286,7 +288,9 @@ def generate_doc_no(prefix_type="QT"):
     hist_df = st.session_state.db_history.copy()
     hist_df['doc_no'] = hist_df['doc_no'].astype(str)
     
-    matched_docs = hist_df[hist_df['doc_no'].str.contains(prefix, na=False)]
+    # กรองเฉพาะที่ขึ้นต้นด้วย Prefix ประเภทนี้ (เช่น QT-, IV-)
+    # ใช้ startswith เพื่อความแม่นยำ
+    matched_docs = hist_df[hist_df['doc_no'].str.startswith(prefix, na=False)]
     
     if matched_docs.empty:
         return f"{prefix}-001"
@@ -608,10 +612,12 @@ with tab1:
         with cust_h1: 
             st.markdown("##### 👤 ข้อมูลลูกค้า (Customer Details)")
         with cust_h2: 
-            # Dropdown เลือกลูกค้า
-            opts = ["-- พิมพ์เอง --" + st.session_state.db_customers['ชื่อบริษัท'].dropna().unique().tolist()]
+            # Dropdown เลือกลูกค้า (Fix: List Concatenation Corrected)
+            cust_list = []
             if not st.session_state.db_customers.empty:
-                opts = ["-- พิมพ์เอง --"] + st.session_state.db_customers['ชื่อบริษัท'].dropna().unique().tolist()
+                cust_list = st.session_state.db_customers['ชื่อบริษัท'].dropna().unique().tolist()
+            
+            opts = ["-- พิมพ์เอง --"] + cust_list
                 
             st.selectbox("🔍 ค้นหาลูกค้าเก่า", opts, key="cust_selector_tab1", on_change=update_customer_fields, label_visibility="collapsed")
 
