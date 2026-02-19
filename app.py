@@ -578,8 +578,7 @@ tab1, tab2, tab3, tab4 = st.tabs([
 # ------------------------------------------------------------------
 with tab1:
     # 1. Header Info Section (Seller + Doc Info)
-    with st.container(border=True):
-        st.markdown("##### 🧾 ข้อมูลเอกสารและผู้ขาย (Document Info)")
+    with st.expander("🧾 ข้อมูลเอกสารและผู้ขาย (Document Info)", expanded=True):
         c1, c2 = st.columns([1.5, 1])
         with c1:
             col_s1, col_s2 = st.columns(2)
@@ -606,13 +605,13 @@ with tab1:
             st.markdown("</div>", unsafe_allow_html=True)
 
     # 2. Customer Info Section
-    with st.container(border=True):
+    with st.expander("👤 ข้อมูลลูกค้า (Customer Details)", expanded=True):
         # Header Row for Customer
         cust_h1, cust_h2 = st.columns([0.6, 0.4])
         with cust_h1: 
-            st.markdown("##### 👤 ข้อมูลลูกค้า (Customer Details)")
+            pass # Removed Markdown Header to avoid duplication with Expander title
         with cust_h2: 
-            # Dropdown เลือกลูกค้า (Fix: List Concatenation Corrected)
+            # Dropdown เลือกลูกค้า
             cust_list = []
             if not st.session_state.db_customers.empty:
                 cust_list = st.session_state.db_customers['ชื่อบริษัท'].dropna().unique().tolist()
@@ -636,44 +635,44 @@ with tab1:
             st.text_input("เบอร์แฟกซ์", key="c_fax_in")
 
     # 3. Items Table
-    st.markdown("##### 📦 รายการสินค้า (Items)")
-    
-    prod_opts = st.session_state.db_products['รหัสสินค้า'].astype(str).unique().tolist()
-    
-    edited_df = st.data_editor(
-        st.session_state.grid_df,
-        column_config={
-            "รหัสสินค้า": st.column_config.SelectboxColumn("รหัส", options=prod_opts, width="medium"),
-            "รายการ": st.column_config.TextColumn("รายการสินค้า", width="large"),
-            "จำนวน": st.column_config.NumberColumn("จำนวน", min_value=0, format="%.0f"),
-            "ราคา": st.column_config.NumberColumn("ราคา", min_value=0, format="%.0f"),
-            "ส่วนลด": st.column_config.NumberColumn("ส่วนลด", min_value=0, format="%.0f")
-        },
-        num_rows="dynamic",
-        use_container_width=True,
-        hide_index=True,
-        key="editor_main"
-    )
+    with st.expander("📦 รายการสินค้า (Items)", expanded=True):
+        
+        prod_opts = st.session_state.db_products['รหัสสินค้า'].astype(str).unique().tolist()
+        
+        edited_df = st.data_editor(
+            st.session_state.grid_df,
+            column_config={
+                "รหัสสินค้า": st.column_config.SelectboxColumn("รหัส", options=prod_opts, width="medium"),
+                "รายการ": st.column_config.TextColumn("รายการสินค้า", width="large"),
+                "จำนวน": st.column_config.NumberColumn("จำนวน", min_value=0, format="%.0f"),
+                "ราคา": st.column_config.NumberColumn("ราคา", min_value=0, format="%.0f"),
+                "ส่วนลด": st.column_config.NumberColumn("ส่วนลด", min_value=0, format="%.0f")
+            },
+            num_rows="dynamic",
+            use_container_width=True,
+            hide_index=True,
+            key="editor_main"
+        )
 
-    # Auto-fill Logic
-    needs_rerun = False
-    for idx, row in edited_df.iterrows():
-        code = str(row['รหัสสินค้า'])
-        if code and code in prod_opts:
-            info = st.session_state.db_products[st.session_state.db_products['รหัสสินค้า'] == code].iloc[0]
-            if str(row['รายการ']) != info['รายการ']:
-                edited_df.at[idx, 'รายการ'] = info['รายการ']
-                edited_df.at[idx, 'หน่วย'] = info['หน่วย']
-                edited_df.at[idx, 'ราคา'] = int(info['ราคา'])
-                needs_rerun = True
-    
-    if needs_rerun:
-        st.session_state.grid_df = edited_df
-        st.rerun()
-    else:
-        st.session_state.grid_df = edited_df
+        # Auto-fill Logic
+        needs_rerun = False
+        for idx, row in edited_df.iterrows():
+            code = str(row['รหัสสินค้า'])
+            if code and code in prod_opts:
+                info = st.session_state.db_products[st.session_state.db_products['รหัสสินค้า'] == code].iloc[0]
+                if str(row['รายการ']) != info['รายการ']:
+                    edited_df.at[idx, 'รายการ'] = info['รายการ']
+                    edited_df.at[idx, 'หน่วย'] = info['หน่วย']
+                    edited_df.at[idx, 'ราคา'] = int(info['ราคา'])
+                    needs_rerun = True
+        
+        if needs_rerun:
+            st.session_state.grid_df = edited_df
+            st.rerun()
+        else:
+            st.session_state.grid_df = edited_df
 
-    # Calculation Logic
+    # Calculation Logic (ทำหน้าที่คำนวณ ไม่แสดงผล UI ไม่จำเป็นต้องอยู่ใน Expander)
     calc_df = edited_df.copy()
     calc_df['q'] = calc_df['จำนวน'].apply(to_int)
     calc_df['p'] = calc_df['ราคา'].apply(to_int)
@@ -684,134 +683,133 @@ with tab1:
     sum_disc = int(calc_df['d'].sum())
     sum_sub = int(calc_df['total'].sum())
 
-    st.write("---")
-
     # 4. Summary & Actions
-    f_col1, f_col2 = st.columns([1.8, 1])
-    
-    with f_col1:
-        st.markdown("##### 📝 หมายเหตุ & การอนุมัติ")
-        st.text_area("หมายเหตุ (Remarks)", value="1. ราคายังไม่รวม VAT 7%\n2. กำหนดยืนราคา 30 วัน", key="remark_in", height=100, label_visibility="collapsed")
+    with st.expander("📊 สรุปยอดและบันทึกเอกสาร", expanded=True):
+        f_col1, f_col2 = st.columns([1.8, 1])
         
-        st.markdown("<br>", unsafe_allow_html=True)
-        s1, s2, s3 = st.columns(3)
-        with s1: st.text_input("ผู้สั่งซื้อ", key="s1_in")
-        with s2: st.text_input("พนักงานขาย", key="s2_in")
-        with s3: st.text_input("ผู้อนุมัติ", key="s3_in")
+        with f_col1:
+            st.markdown("##### 📝 หมายเหตุ & การอนุมัติ")
+            st.text_area("หมายเหตุ (Remarks)", value="1. ราคายังไม่รวม VAT 7%\n2. กำหนดยืนราคา 30 วัน", key="remark_in", height=100, label_visibility="collapsed")
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            s1, s2, s3 = st.columns(3)
+            with s1: st.text_input("ผู้สั่งซื้อ", key="s1_in")
+            with s2: st.text_input("พนักงานขาย", key="s2_in")
+            with s3: st.text_input("ผู้อนุมัติ", key="s3_in")
 
-    with f_col2:
-        # Grand Total Card
-        has_vat = st.checkbox("คำนวณ VAT 7%", value=True)
-        vat_val = int(round(sum_sub * 0.07)) if has_vat else 0
-        grand_total = sum_sub + vat_val
-        
-        baht_text_show = bahttext(grand_total)
-        
-        vat_style = "" if has_vat else "display: none;"
-        
-        st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-label">ยอดรวมทั้งสิ้น (Grand Total)</div>
-            <div class="metric-value">{grand_total:,.0f}</div>
-            <div style="font-size: 0.8rem; color: #166534; opacity: 0.8; margin-bottom:10px;">{baht_text_show}</div>
-            <div style="margin-top: 15px; font-size: 0.9rem; color: #555; text-align: right; border-top: 1px dashed #ccc; padding-top:10px;">
-                <table style="width: 100%;">
-                    <tr><td style="text-align: left; color:#666;">รวมสินค้า:</td><td style="text-align: right;">{sum_gross:,.0f}</td></tr>
-                    <tr><td style="text-align: left; color:#666;">ส่วนลด:</td><td style="text-align: right; color: #dc2626;">-{sum_disc:,.0f}</td></tr>
-                    <tr><td style="text-align: left; font-weight: 600;">ก่อนภาษี:</td><td style="text-align: right; font-weight: 600;">{sum_sub:,.0f}</td></tr>
-                    <tr style="{vat_style}"><td style="text-align: left; color:#666;">VAT 7%:</td><td style="text-align: right;">{vat_val:,.0f}</td></tr>
-                </table>
+        with f_col2:
+            # Grand Total Card
+            has_vat = st.checkbox("คำนวณ VAT 7%", value=True)
+            vat_val = int(round(sum_sub * 0.07)) if has_vat else 0
+            grand_total = sum_sub + vat_val
+            
+            baht_text_show = bahttext(grand_total)
+            
+            vat_style = "" if has_vat else "display: none;"
+            
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-label">ยอดรวมทั้งสิ้น (Grand Total)</div>
+                <div class="metric-value">{grand_total:,.0f}</div>
+                <div style="font-size: 0.8rem; color: #166534; opacity: 0.8; margin-bottom:10px;">{baht_text_show}</div>
+                <div style="margin-top: 15px; font-size: 0.9rem; color: #555; text-align: right; border-top: 1px dashed #ccc; padding-top:10px;">
+                    <table style="width: 100%;">
+                        <tr><td style="text-align: left; color:#666;">รวมสินค้า:</td><td style="text-align: right;">{sum_gross:,.0f}</td></tr>
+                        <tr><td style="text-align: left; color:#666;">ส่วนลด:</td><td style="text-align: right; color: #dc2626;">-{sum_disc:,.0f}</td></tr>
+                        <tr><td style="text-align: left; font-weight: 600;">ก่อนภาษี:</td><td style="text-align: right; font-weight: 600;">{sum_sub:,.0f}</td></tr>
+                        <tr style="{vat_style}"><td style="text-align: left; color:#666;">VAT 7%:</td><td style="text-align: right;">{vat_val:,.0f}</td></tr>
+                    </table>
+                </div>
             </div>
-        </div>
-        """, unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
 
-    st.markdown("###")
-    
-    # Action Buttons
-    b1, b2 = st.columns([0.2, 0.8])
-    with b1:
-        st.button("🧹 ล้างหน้าจอ", on_click=clear_all_data, use_container_width=True)
-    with b2:
-        if st.button("🚀 บันทึกและพิมพ์ PDF", type="primary", use_container_width=True):
-            # 1. Save History
-            doc_no = st.session_state.doc_no_in
-            json_data = {
-                "grid_df": edited_df.to_dict(),
-                "doc_date_str": str(st.session_state.doc_date_in),
-                "due_date": st.session_state.due_date_in,
-                "valid_days": st.session_state.valid_days_in,
-                "credit": st.session_state.credit_in,
-                "c_name": st.session_state.c_name_in,
-                "contact": st.session_state.contact_in,
-                "c_addr": st.session_state.c_addr_in,
-                "c_tel": st.session_state.c_tel_in,
-                "c_fax": st.session_state.c_fax_in,
-                "remark": st.session_state.remark_in,
-                "s1": st.session_state.s1_in, "s2": st.session_state.s2_in, "s3": st.session_state.s3_in,
-                "has_vat": has_vat,
-                "my_comp": st.session_state.my_comp_in, "my_addr": st.session_state.my_addr_in,
-                "my_tel": st.session_state.my_tel_in, "my_fax": st.session_state.my_fax_in, "my_tax": st.session_state.my_tax_in
-            }
-            
-            new_rec = {
-                "ลบ": False,
-                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "doc_no": doc_no,
-                "customer": st.session_state.c_name_in,
-                "total": grand_total,
-                "data_json": json.dumps(json_data, ensure_ascii=False)
-            }
-            
-            st.session_state.db_history = pd.concat([pd.DataFrame([new_rec]), st.session_state.db_history], ignore_index=True)
-            save_data(st.session_state.db_history, HISTORY_FILE)
-            
-            # 2. Create PDF
-            pdf_data = {
-                "my_comp": st.session_state.my_comp_in, "my_addr": st.session_state.my_addr_in,
-                "my_tel": st.session_state.my_tel_in, "my_fax": st.session_state.my_fax_in, "my_tax": st.session_state.my_tax_in,
-                "doc_no": doc_no, "doc_date": st.session_state.doc_date_in.strftime("%d/%m/%Y"),
-                "due_date": st.session_state.due_date_in,
-                "valid_days": st.session_state.valid_days_in,
-                "credit": st.session_state.credit_in,
-                "exp_date": (st.session_state.doc_date_in + timedelta(days=int(st.session_state.valid_days_in) if st.session_state.valid_days_in.isdigit() else 30)).strftime("%d/%m/%Y"),
-                "c_name": st.session_state.c_name_in, "contact": st.session_state.contact_in,
-                "c_addr": st.session_state.c_addr_in, "c_tel": st.session_state.c_tel_in, "c_fax": st.session_state.c_fax_in
-            }
-            
-            pdf_bytes = create_pdf(
-                pdf_data, calc_df, 
-                {"gross": sum_gross, "discount": sum_disc, "subtotal": sum_sub, "vat": vat_val, "grand_total": grand_total},
-                {"s1": st.session_state.s1_in, "s2": st.session_state.s2_in, "s3": st.session_state.s3_in},
-                st.session_state.remark_in, has_vat,
-                doc_title="ใบเสนอราคา (QUOTATION)"
+        st.markdown("###")
+        
+        # Action Buttons
+        b1, b2 = st.columns([0.2, 0.8])
+        with b1:
+            st.button("🧹 ล้างหน้าจอ", on_click=clear_all_data, use_container_width=True)
+        with b2:
+            if st.button("🚀 บันทึกและพิมพ์ PDF", type="primary", use_container_width=True):
+                # 1. Save History
+                doc_no = st.session_state.doc_no_in
+                json_data = {
+                    "grid_df": edited_df.to_dict(),
+                    "doc_date_str": str(st.session_state.doc_date_in),
+                    "due_date": st.session_state.due_date_in,
+                    "valid_days": st.session_state.valid_days_in,
+                    "credit": st.session_state.credit_in,
+                    "c_name": st.session_state.c_name_in,
+                    "contact": st.session_state.contact_in,
+                    "c_addr": st.session_state.c_addr_in,
+                    "c_tel": st.session_state.c_tel_in,
+                    "c_fax": st.session_state.c_fax_in,
+                    "remark": st.session_state.remark_in,
+                    "s1": st.session_state.s1_in, "s2": st.session_state.s2_in, "s3": st.session_state.s3_in,
+                    "has_vat": has_vat,
+                    "my_comp": st.session_state.my_comp_in, "my_addr": st.session_state.my_addr_in,
+                    "my_tel": st.session_state.my_tel_in, "my_fax": st.session_state.my_fax_in, "my_tax": st.session_state.my_tax_in
+                }
+                
+                new_rec = {
+                    "ลบ": False,
+                    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "doc_no": doc_no,
+                    "customer": st.session_state.c_name_in,
+                    "total": grand_total,
+                    "data_json": json.dumps(json_data, ensure_ascii=False)
+                }
+                
+                st.session_state.db_history = pd.concat([pd.DataFrame([new_rec]), st.session_state.db_history], ignore_index=True)
+                save_data(st.session_state.db_history, HISTORY_FILE)
+                
+                # 2. Create PDF
+                pdf_data = {
+                    "my_comp": st.session_state.my_comp_in, "my_addr": st.session_state.my_addr_in,
+                    "my_tel": st.session_state.my_tel_in, "my_fax": st.session_state.my_fax_in, "my_tax": st.session_state.my_tax_in,
+                    "doc_no": doc_no, "doc_date": st.session_state.doc_date_in.strftime("%d/%m/%Y"),
+                    "due_date": st.session_state.due_date_in,
+                    "valid_days": st.session_state.valid_days_in,
+                    "credit": st.session_state.credit_in,
+                    "exp_date": (st.session_state.doc_date_in + timedelta(days=int(st.session_state.valid_days_in) if st.session_state.valid_days_in.isdigit() else 30)).strftime("%d/%m/%Y"),
+                    "c_name": st.session_state.c_name_in, "contact": st.session_state.contact_in,
+                    "c_addr": st.session_state.c_addr_in, "c_tel": st.session_state.c_tel_in, "c_fax": st.session_state.c_fax_in
+                }
+                
+                pdf_bytes = create_pdf(
+                    pdf_data, calc_df, 
+                    {"gross": sum_gross, "discount": sum_disc, "subtotal": sum_sub, "vat": vat_val, "grand_total": grand_total},
+                    {"s1": st.session_state.s1_in, "s2": st.session_state.s2_in, "s3": st.session_state.s3_in},
+                    st.session_state.remark_in, has_vat,
+                    doc_title="ใบเสนอราคา (QUOTATION)"
+                )
+                
+                st.session_state.generated_pdf_bytes = pdf_bytes
+                if lottie_success:
+                    st_lottie(lottie_success, height=150, key="success_anim")
+                st.success(f"บันทึกเอกสาร {doc_no} เรียบร้อย!")
+
+        if st.session_state.generated_pdf_bytes:
+            st.download_button(
+                label="📄 ดาวน์โหลด PDF",
+                data=st.session_state.generated_pdf_bytes,
+                file_name=f"Quotation_{st.session_state.doc_no_in}.pdf",
+                mime="application/pdf",
+                type="secondary"
             )
             
-            st.session_state.generated_pdf_bytes = pdf_bytes
-            if lottie_success:
-                st_lottie(lottie_success, height=150, key="success_anim")
-            st.success(f"บันทึกเอกสาร {doc_no} เรียบร้อย!")
-
-    if st.session_state.generated_pdf_bytes:
-        st.download_button(
-            label="📄 ดาวน์โหลด PDF",
-            data=st.session_state.generated_pdf_bytes,
-            file_name=f"Quotation_{st.session_state.doc_no_in}.pdf",
-            mime="application/pdf",
-            type="secondary"
-        )
-        
-        # Email Form
-        with st.expander("📧 ส่งอีเมลหาลูกค้าทันที"):
-            em_receiver = st.text_input("อีเมลลูกค้า", placeholder="client@example.com")
-            em_subject = st.text_input("หัวข้อ", value=f"ใบเสนอราคา {st.session_state.doc_no_in}")
-            em_body = st.text_area("ข้อความ", value="เรียน ลูกค้า,\n\nแนบมาพร้อมกับใบเสนอราคา\n\nขอบคุณครับ")
-            if st.button("ส่งอีเมล"):
-                if email_sender and email_password and em_receiver:
-                    success, msg = send_email_with_attachment(email_sender, email_password, em_receiver, em_subject, em_body, st.session_state.generated_pdf_bytes, f"QT_{st.session_state.doc_no_in}.pdf")
-                    if success: st.success(msg)
-                    else: st.error(msg)
-                else:
-                    st.error("กรุณากรอกข้อมูลอีเมลผู้ส่งในเมนูซ้ายมือให้ครบถ้วน")
+            # Email Form
+            with st.expander("📧 ส่งอีเมลหาลูกค้าทันที"):
+                em_receiver = st.text_input("อีเมลลูกค้า", placeholder="client@example.com")
+                em_subject = st.text_input("หัวข้อ", value=f"ใบเสนอราคา {st.session_state.doc_no_in}")
+                em_body = st.text_area("ข้อความ", value="เรียน ลูกค้า,\n\nแนบมาพร้อมกับใบเสนอราคา\n\nขอบคุณครับ")
+                if st.button("ส่งอีเมล"):
+                    if email_sender and email_password and em_receiver:
+                        success, msg = send_email_with_attachment(email_sender, email_password, em_receiver, em_subject, em_body, st.session_state.generated_pdf_bytes, f"QT_{st.session_state.doc_no_in}.pdf")
+                        if success: st.success(msg)
+                        else: st.error(msg)
+                    else:
+                        st.error("กรุณากรอกข้อมูลอีเมลผู้ส่งในเมนูซ้ายมือให้ครบถ้วน")
 
 # ------------------------------------------------------------------
 # TAB 2: Customer Database
