@@ -6,4 +6,5 @@ fpdf2
 requests
 streamlit-lottie
 bahttext
-
+PyMuPDF
+Pillow
