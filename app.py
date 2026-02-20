@@ -12,6 +12,15 @@ from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
 from bahttext import bahttext 
+import io
+
+# นำเข้าไลบรารีสำหรับแปลงรูปภาพ (หากไม่ได้ติดตั้ง จะมีการแจ้งเตือนหน้าเว็บ)
+try:
+    import fitz  # pip install PyMuPDF
+    from PIL import Image # pip install Pillow
+    HAS_IMG_LIB = True
+except ImportError:
+    HAS_IMG_LIB = False
 
 # ==========================================
 # 1. SYSTEM CONFIG & ASSETS
@@ -519,6 +528,40 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line, doc_title
 
     return bytes(pdf.output())
 
+# --- ฟังก์ชันช่วยเหลือสำหรับแปลง PDF เป็นรูปภาพ ---
+def convert_pdf_to_image(pdf_bytes, format_type):
+    if not HAS_IMG_LIB:
+        return None, "กรุณาติดตั้งไลบรารีเพิ่มเติม: pip install PyMuPDF Pillow"
+    try:
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        images = []
+        for page in doc:
+            pix = page.get_pixmap(dpi=150)
+            img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+            images.append(img)
+        
+        if not images:
+            return None, "ไม่สามารถอ่านหน้า PDF ได้"
+            
+        # นำรูปภาพของแต่ละหน้ามาต่อกันเป็นรูปเดียว (บนลงล่าง)
+        widths, heights = zip(*(i.size for i in images))
+        max_width = max(widths)
+        total_height = sum(heights)
+        
+        new_im = Image.new('RGB', (max_width, total_height), (255, 255, 255))
+        y_offset = 0
+        for im in images:
+            new_im.paste(im, (0, y_offset))
+            y_offset += im.size[1]
+            
+        img_byte_arr = io.BytesIO()
+        pil_format = "JPEG" if format_type.upper() == "JPG" else "PNG"
+        new_im.save(img_byte_arr, format=pil_format)
+        return img_byte_arr.getvalue(), None
+    except Exception as e:
+        return None, str(e)
+
+
 # ==========================================
 # 5. USER INTERFACE
 # ==========================================
@@ -790,13 +833,29 @@ with tab1:
                 st.success(f"บันทึกเอกสาร {doc_no} เรียบร้อย!")
 
         if st.session_state.generated_pdf_bytes:
-            st.download_button(
-                label="📄 ดาวน์โหลด PDF",
-                data=st.session_state.generated_pdf_bytes,
-                file_name=f"Quotation_{st.session_state.doc_no_in}.pdf",
-                mime="application/pdf",
-                type="secondary"
-            )
+            st.markdown("##### 📥 ดาวน์โหลดเอกสาร")
+            export_format = st.radio("เลือกนามสกุลไฟล์ที่ต้องการดาวน์โหลด:", ["PDF", "JPG", "PNG"], horizontal=True, key="export_format_tab1")
+            
+            if export_format == "PDF":
+                st.download_button(
+                    label="📄 ดาวน์โหลด PDF",
+                    data=st.session_state.generated_pdf_bytes,
+                    file_name=f"Quotation_{st.session_state.doc_no_in}.pdf",
+                    mime="application/pdf",
+                    type="secondary"
+                )
+            else:
+                img_bytes, err = convert_pdf_to_image(st.session_state.generated_pdf_bytes, export_format)
+                if img_bytes:
+                    st.download_button(
+                        label=f"🖼️ ดาวน์โหลด {export_format}",
+                        data=img_bytes,
+                        file_name=f"Quotation_{st.session_state.doc_no_in}.{export_format.lower()}",
+                        mime=f"image/{export_format.lower()}",
+                        type="secondary"
+                    )
+                else:
+                    st.error(f"ไม่สามารถแปลงไฟล์ได้: {err}")
             
             # Email Form
             with st.expander("📧 ส่งอีเมลหาลูกค้าทันที"):
@@ -1014,14 +1073,32 @@ with tab4:
             # Download Section
             if st.session_state.convert_pdf_bytes:
                 st.markdown("##### 📥 ดาวน์โหลดเอกสารล่าสุด")
-                st.download_button(
-                    label=f"ดาวน์โหลด {st.session_state.get('convert_filename', 'document.pdf')}",
-                    data=st.session_state.convert_pdf_bytes,
-                    file_name=st.session_state.get('convert_filename', 'document.pdf'),
-                    mime="application/pdf",
-                    type="primary",
-                    use_container_width=True
-                )
+                export_format_t4 = st.radio("เลือกนามสกุลไฟล์ที่ต้องการดาวน์โหลด:", ["PDF", "JPG", "PNG"], horizontal=True, key="export_format_tab4")
+                
+                doc_base_name = st.session_state.get('convert_filename', 'document.pdf').replace('.pdf', '')
+                
+                if export_format_t4 == "PDF":
+                    st.download_button(
+                        label=f"ดาวน์โหลด {doc_base_name}.pdf",
+                        data=st.session_state.convert_pdf_bytes,
+                        file_name=f"{doc_base_name}.pdf",
+                        mime="application/pdf",
+                        type="primary",
+                        use_container_width=True
+                    )
+                else:
+                    img_bytes, err = convert_pdf_to_image(st.session_state.convert_pdf_bytes, export_format_t4)
+                    if img_bytes:
+                        st.download_button(
+                            label=f"ดาวน์โหลด {doc_base_name}.{export_format_t4.lower()}",
+                            data=img_bytes,
+                            file_name=f"{doc_base_name}.{export_format_t4.lower()}",
+                            mime=f"image/{export_format_t4.lower()}",
+                            type="primary",
+                            use_container_width=True
+                        )
+                    else:
+                        st.error(f"ไม่สามารถแปลงไฟล์ได้: {err}")
             
             st.markdown("</div>", unsafe_allow_html=True)
             
