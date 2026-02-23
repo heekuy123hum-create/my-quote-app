@@ -803,6 +803,10 @@ with tab1:
                     "data_json": json.dumps(json_data, ensure_ascii=False)
                 }
                 
+                # ตรวจสอบว่าถ้าเป็นการแก้ไขเอกสารเดิม ให้เขียนทับแทนการเพิ่มบรรทัดใหม่
+                if not st.session_state.db_history.empty and doc_no in st.session_state.db_history['doc_no'].values:
+                    st.session_state.db_history = st.session_state.db_history[st.session_state.db_history['doc_no'] != doc_no]
+                
                 st.session_state.db_history = pd.concat([pd.DataFrame([new_rec]), st.session_state.db_history], ignore_index=True)
                 save_data(st.session_state.db_history, HISTORY_FILE)
                 
@@ -952,9 +956,39 @@ with tab4:
         
         with col_hist1:
             st.subheader("รายการเอกสารทั้งหมด")
-            disp_hist = st.session_state.db_history.drop(columns=['data_json', 'ลบ'], errors='ignore')
-            st.dataframe(disp_hist, use_container_width=True, height=500)
+            st.write("💡 ติ๊กช่อง 'ลบ' แล้วกดปุ่มบันทึกด้านล่างเพื่อลบเอกสาร")
             
+            disp_hist = st.session_state.db_history.copy()
+            
+            # นำคอลัมน์ 'ลบ' มาไว้หน้าสุด
+            cols_h = list(disp_hist.columns)
+            if 'ลบ' in cols_h:
+                cols_h.insert(0, cols_h.pop(cols_h.index('ลบ')))
+                disp_hist = disp_hist[cols_h]
+            
+            # ซ่อนคอลัมน์ data_json สำหรับการแสดงผล
+            if 'data_json' in disp_hist.columns:
+                disp_hist = disp_hist.drop(columns=['data_json'])
+                
+            edited_hist = st.data_editor(
+                disp_hist,
+                use_container_width=True,
+                height=500,
+                hide_index=True,
+                column_config={
+                    "ลบ": st.column_config.CheckboxColumn("ลบ (ติ๊กเพื่อลบ)", default=False, width="small"),
+                },
+                key="editor_hist"
+            )
+            
+            if st.button("🗑️ บันทึกการลบเอกสาร", type="primary", use_container_width=True):
+                st.session_state.db_history['ลบ'] = edited_hist['ลบ'].values
+                to_save_h = st.session_state.db_history[st.session_state.db_history['ลบ'] == False].copy()
+                to_save_h = save_data(to_save_h, HISTORY_FILE, key_col="doc_no")
+                st.session_state.db_history = to_save_h
+                st.success("ลบเอกสารที่เลือกเรียบร้อย!")
+                st.rerun()
+                
         with col_hist2:
             st.markdown("""<div class="custom-card">""", unsafe_allow_html=True)
             st.subheader("🔄 แปลงเอกสาร (Convert)")
@@ -1069,6 +1103,62 @@ with tab4:
 
                     except Exception as e:
                         st.error(f"Error parsing data: {e}")
+            st.markdown("</div>", unsafe_allow_html=True)
+
+            # --- NEW EDIT SECTION ---
+            st.markdown("""<div class="custom-card">""", unsafe_allow_html=True)
+            st.subheader("✏️ ดึงข้อมูลไปแก้ไข (Load to Edit)")
+            st.write("เลือกเอกสารเพื่อนำข้อมูลกลับไปแก้ไขที่หน้า 'สร้างใบเสนอราคา'")
+            
+            all_docs_list = st.session_state.db_history['doc_no'].tolist()
+            if not all_docs_list:
+                st.warning("ไม่มีเอกสารในระบบ")
+            else:
+                selected_edit = st.selectbox("เลือกเอกสารที่ต้องการแก้ไข", all_docs_list, key="edit_doc_selector")
+                if st.button("ดึงข้อมูลไปแก้ไข 📝", use_container_width=True):
+                    row_data = st.session_state.db_history[st.session_state.db_history['doc_no'] == selected_edit].iloc[0]
+                    json_raw = row_data['data_json']
+                    try:
+                        data = json.loads(json_raw)
+                        
+                        # อัปเดต session_state ของหน้า Tab 1
+                        st.session_state.doc_no_in = selected_edit
+                        if 'my_comp' in data: st.session_state.my_comp_in = data['my_comp']
+                        if 'my_addr' in data: st.session_state.my_addr_in = data['my_addr']
+                        if 'my_tel' in data: st.session_state.my_tel_in = data['my_tel']
+                        if 'my_tax' in data: st.session_state.my_tax_in = data['my_tax']
+                        if 'my_fax' in data: st.session_state.my_fax_in = data['my_fax']
+                        if 'valid_days' in data: st.session_state.valid_days_in = data['valid_days']
+                        
+                        try:
+                            if 'doc_date_str' in data:
+                                st.session_state.doc_date_in = datetime.strptime(data['doc_date_str'], '%Y-%m-%d').date()
+                        except:
+                            st.session_state.doc_date_in = date.today()
+                            
+                        if 'credit' in data: st.session_state.credit_in = data['credit']
+                        if 'due_date' in data: st.session_state.due_date_in = data['due_date']
+                        if 'c_name' in data: st.session_state.c_name_in = data['c_name']
+                        if 'c_addr' in data: st.session_state.c_addr_in = data['c_addr']
+                        if 'contact' in data: st.session_state.contact_in = data['contact']
+                        if 'c_tel' in data: st.session_state.c_tel_in = data['c_tel']
+                        if 'c_fax' in data: st.session_state.c_fax_in = data['c_fax']
+                        if 'remark' in data: st.session_state.remark_in = data['remark']
+                        if 's1' in data: st.session_state.s1_in = data['s1']
+                        if 's2' in data: st.session_state.s2_in = data['s2']
+                        if 's3' in data: st.session_state.s3_in = data['s3']
+                        
+                        if 'grid_df' in data:
+                            loaded_df = pd.DataFrame.from_dict(data['grid_df'])
+                            # ให้แน่ใจว่าจำนวนแถวครบ 15 แถวเพื่อความสวยงามในหน้า UI
+                            while len(loaded_df) < 15:
+                                loaded_df = pd.concat([loaded_df, pd.DataFrame([{"รหัสสินค้า": "", "รายการ": "", "จำนวน": 0, "หน่วย": "", "ราคา": 0, "ส่วนลด": 0}])], ignore_index=True)
+                            st.session_state.grid_df = loaded_df
+                            
+                        st.success(f"ดึงข้อมูล {selected_edit} สำเร็จ! กรุณาไปที่แท็บ 'สร้างใบเสนอราคา' เพื่อแก้ไข")
+                    except Exception as e:
+                        st.error(f"เกิดข้อผิดพลาดในการดึงข้อมูล: {str(e)}")
+            st.markdown("</div>", unsafe_allow_html=True)
 
             # Download Section
             if st.session_state.convert_pdf_bytes:
