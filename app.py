@@ -13,6 +13,7 @@ from email.mime.base import MIMEBase
 from email import encoders
 from bahttext import bahttext 
 import io
+import base64
 
 # นำเข้าไลบรารีสำหรับแปลงรูปภาพ (หากไม่ได้ติดตั้ง จะมีการแจ้งเตือนหน้าเว็บ)
 try:
@@ -565,6 +566,13 @@ def convert_pdf_to_image(pdf_bytes, format_type):
 # ==========================================
 # 5. USER INTERFACE
 # ==========================================
+
+# --- ฟังก์ชันช่วยเหลือสำหรับแสดง PDF ---
+def display_pdf(pdf_bytes):
+    base64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
+    pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="600" type="application/pdf"></iframe>'
+    st.markdown(pdf_display, unsafe_allow_html=True)
+
 def clear_all_data():
     st.session_state.grid_df = pd.DataFrame([{"รหัสสินค้า": "", "รายการ": "", "จำนวน": 0, "หน่วย": "", "ราคา": 0, "ส่วนลด": 0}] * 15)
     reset_keys = ["c_name_in", "contact_in", "c_addr_in", "c_tel_in", "c_fax_in", "remark_in", "s1_in", "s2_in", "s3_in"]
@@ -837,6 +845,9 @@ with tab1:
                 st.success(f"บันทึกเอกสาร {doc_no} เรียบร้อย!")
 
         if st.session_state.generated_pdf_bytes:
+            st.markdown("##### 📄 ตัวอย่างเอกสาร (Preview)")
+            display_pdf(st.session_state.generated_pdf_bytes)
+            
             st.markdown("##### 📥 ดาวน์โหลดเอกสาร")
             export_format = st.radio("เลือกนามสกุลไฟล์ที่ต้องการดาวน์โหลด:", ["PDF", "JPG", "PNG"], horizontal=True, key="export_format_tab1")
             
@@ -1162,6 +1173,9 @@ with tab4:
 
             # Download Section
             if st.session_state.convert_pdf_bytes:
+                st.markdown("##### 📄 ตัวอย่างเอกสาร (Preview)")
+                display_pdf(st.session_state.convert_pdf_bytes)
+                
                 st.markdown("##### 📥 ดาวน์โหลดเอกสารล่าสุด")
                 export_format_t4 = st.radio("เลือกนามสกุลไฟล์ที่ต้องการดาวน์โหลด:", ["PDF", "JPG", "PNG"], horizontal=True, key="export_format_tab4")
                 
