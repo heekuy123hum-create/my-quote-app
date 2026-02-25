@@ -3,7 +3,6 @@ import pandas as pd
 from datetime import datetime, date, timedelta
 import os
 import json
-from fpdf import FPDF
 import requests
 from streamlit_lottie import st_lottie
 import smtplib
@@ -12,16 +11,13 @@ from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
 from bahttext import bahttext 
-import io
 import base64
 
-# นำเข้าไลบรารีสำหรับแปลงรูปภาพ (หากไม่ได้ติดตั้ง จะมีการแจ้งเตือนหน้าเว็บ)
-try:
-    import fitz  # pip install PyMuPDF
-    from PIL import Image # pip install Pillow
-    HAS_IMG_LIB = True
-except ImportError:
-    HAS_IMG_LIB = False
+# ==========================================
+# นำเข้าโมดูลจากไฟล์ที่แยกออกไป (เดี๋ยวเราจะสร้าง 2 ไฟล์นี้ทีหลัง)
+# ==========================================
+from database import load_data, save_data, generate_doc_no, to_int, CUST_FILE, PROD_FILE, HISTORY_FILE
+from pdf_generator import create_pdf, convert_pdf_to_image
 
 # ==========================================
 # 1. SYSTEM CONFIG & ASSETS
@@ -152,12 +148,6 @@ def load_lottieurl(url: str):
 lottie_office = load_lottieurl("https://lottie.host/5a8b7928-8924-4069-950c-1123533866b1/0XgV0lK1uF.json")
 lottie_success = load_lottieurl("https://assets9.lottiefiles.com/packages/lf20_ttv8K8.json")
 
-# ชื่อไฟล์สำหรับเก็บข้อมูล
-CUST_FILE = "database_customers.csv"
-PROD_FILE = "database_products.csv"
-HISTORY_FILE = "history_quotes.csv"
-FONT_PATH = "THSarabunNew.ttf" 
-
 # เริ่มต้นตัวแปร Session State
 if "grid_df" not in st.session_state:
     st.session_state.grid_df = pd.DataFrame(
@@ -199,372 +189,11 @@ def send_email_with_attachment(sender_email, sender_password, receiver_email, su
     except Exception as e:
         return False, f"เกิดข้อผิดพลาด: {str(e)}"
 
-# ==========================================
-# 3. DATABASE & LOGIC MANAGEMENT
-# ==========================================
-def load_data():
-    # --- 1. โหลดข้อมูลลูกค้า ---
-    if "db_customers" not in st.session_state:
-        if os.path.exists(CUST_FILE):
-            try:
-                temp_df = pd.read_csv(CUST_FILE, encoding='utf-8-sig')
-                if 'Unnamed: 0' in temp_df.columns: temp_df = temp_df.drop(columns=['Unnamed: 0'])
-                # ตรวจสอบคอลัมน์ "ลบ" ถ้าไม่มีให้เพิ่ม
-                if 'ลบ' not in temp_df.columns:
-                    temp_df.insert(0, 'ลบ', False)
-                st.session_state.db_customers = temp_df
-            except:
-                st.session_state.db_customers = pd.DataFrame(columns=["ลบ", "รหัส", "ชื่อบริษัท", "ผู้ติดต่อ", "ที่อยู่", "โทร", "แฟกซ์"])
-        else:
-            st.session_state.db_customers = pd.DataFrame([
-                {"ลบ": False, "รหัส": "C001", "ชื่อบริษัท": "ลูกค้าทั่วไป (เงินสด)", "ผู้ติดต่อ": "-", "ที่อยู่": "-", "โทร": "-", "แฟกซ์": "-"}
-            ])
-        
-        # Ensure boolean type for checkbox
-        st.session_state.db_customers['ลบ'] = st.session_state.db_customers['ลบ'].fillna(False).astype(bool)
-
-    # --- 2. โหลดข้อมูลสินค้า ---
-    if "db_products" not in st.session_state:
-        if os.path.exists(PROD_FILE):
-            try:
-                temp_df_p = pd.read_csv(PROD_FILE, encoding='utf-8-sig')
-                if 'Unnamed: 0' in temp_df_p.columns: temp_df_p = temp_df_p.drop(columns=['Unnamed: 0'])
-                if 'รหัสสินค้า' in temp_df_p.columns:
-                    temp_df_p['รหัสสินค้า'] = temp_df_p['รหัสสินค้า'].astype(str)
-                # ตรวจสอบคอลัมน์ "ลบ" ถ้าไม่มีให้เพิ่ม
-                if 'ลบ' not in temp_df_p.columns:
-                    temp_df_p.insert(0, 'ลบ', False)
-                st.session_state.db_products = temp_df_p
-            except:
-                st.session_state.db_products = pd.DataFrame(columns=["ลบ", "รหัสสินค้า", "รายการ", "ราคา", "หน่วย"])
-        else:
-            st.session_state.db_products = pd.DataFrame([
-                {"ลบ": False, "รหัสสินค้า": "P001", "รายการ": "สินค้าตัวอย่าง", "ราคา": 1000, "หน่วย": "ชิ้น"}
-            ])
-        
-        # Ensure boolean type for checkbox
-        st.session_state.db_products['ลบ'] = st.session_state.db_products['ลบ'].fillna(False).astype(bool)
-
-    # --- 3. โหลดประวัติ ---
-    if "db_history" not in st.session_state:
-        if os.path.exists(HISTORY_FILE):
-            try:
-                temp_hist = pd.read_csv(HISTORY_FILE, encoding='utf-8-sig')
-                if 'ลบ' not in temp_hist.columns: temp_hist.insert(0, 'ลบ', False)
-                if 'Unnamed: 0' in temp_hist.columns: temp_hist = temp_hist.drop(columns=['Unnamed: 0'])
-                st.session_state.db_history = temp_hist
-            except:
-                st.session_state.db_history = pd.DataFrame(columns=["ลบ", "timestamp", "doc_no", "customer", "total", "data_json"])
-        else:
-            st.session_state.db_history = pd.DataFrame(columns=["ลบ", "timestamp", "doc_no", "customer", "total", "data_json"])
-
-def save_data(df, filename, key_col=None):
-    df_to_save = df.copy()
-    
-    # Logic: กรองเฉพาะแถวที่ไม่ได้ติ๊ก "ลบ" และข้อมูลไม่ว่างเปล่า
-    if 'ลบ' in df_to_save.columns:
-        df_to_save = df_to_save[df_to_save['ลบ'] == False]
-        # รีเซ็ตค่าลบเป็น False เผื่อไว้ (แต่จริงๆ ถูกกรองออกไปแล้ว)
-        df_to_save['ลบ'] = False
-
-    if key_col and key_col in df_to_save.columns:
-         df_to_save = df_to_save[df_to_save[key_col].astype(str).str.strip() != ""]
-         
-    if 'Unnamed: 0' in df_to_save.columns:
-        df_to_save = df_to_save.drop(columns=['Unnamed: 0'])
-        
-    df_to_save = df_to_save.reset_index(drop=True)
-    df_to_save.to_csv(filename, index=False, encoding='utf-8-sig')
-    return df_to_save
-
-def to_int(val):
-    try:
-        if isinstance(val, str): val = val.replace(',', '')
-        return int(round(float(val))) if val is not None else 0
-    except:
-        return 0
-
-# --- Function Auto-Increment Doc No (Updated for QT/IV/RE) ---
-def generate_doc_no(prefix_type="QT"):
-    # prefix_type: QT=Quotation, IV=Invoice, RE=Receipt
-    today_str = datetime.now().strftime('%Y%m%d')
-    prefix = f"{prefix_type}-{today_str}"
-    
-    # ถ้าไม่มีประวัติเลย ให้เริ่มที่ 001
-    if st.session_state.db_history.empty:
-        return f"{prefix}-001"
-    
-    # ค้นหาเอกสารที่มี Prefix เดียวกันในประวัติ
-    hist_df = st.session_state.db_history.copy()
-    hist_df['doc_no'] = hist_df['doc_no'].astype(str)
-    
-    # กรองเฉพาะที่ขึ้นต้นด้วย Prefix ประเภทนี้ (เช่น QT-, IV-)
-    # ใช้ startswith เพื่อความแม่นยำ
-    matched_docs = hist_df[hist_df['doc_no'].str.startswith(prefix, na=False)]
-    
-    if matched_docs.empty:
-        return f"{prefix}-001"
-    
-    # หาเลขรันสูงสุดแล้วบวก 1
-    max_run = 0
-    for doc in matched_docs['doc_no']:
-        try:
-            # format: PREFIX-YYYYMMDD-XXX
-            parts = doc.split('-')
-            if len(parts) >= 3:
-                run_num = int(parts[-1])
-                if run_num > max_run:
-                    max_run = run_num
-        except:
-            pass
-            
-    return f"{prefix}-{max_run + 1:03d}"
-
+# เรียกใช้งานการโหลดฐานข้อมูล
 load_data()
 
 # ==========================================
-# 4. PDF ENGINE (Updated: doc_title support)
-# ==========================================
-def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line, doc_title="ใบเสนอราคา (QUOTATION)"):
-    pdf = FPDF(unit='mm', format='A4')
-    pdf.set_margins(15, 15, 15)
-    pdf.set_auto_page_break(auto=False)
-    
-    # Prepare Font
-    if os.path.exists(FONT_PATH):
-        pdf.add_font('THSarabun', '', FONT_PATH, uni=True)
-        pdf.add_font('THSarabun', 'B', FONT_PATH, uni=True)
-        use_f = 'THSarabun'
-    else:
-        use_f = 'Arial'
-
-    # --- Prepare Data for Pagination ---
-    valid_items = items_df[items_df['รายการ'].str.strip() != ""].copy()
-    
-    # Constants
-    MAX_ROWS_PER_PAGE = 15
-    total_items = len(valid_items)
-    
-    # Calculate pages needed
-    import math
-    num_pages = math.ceil(total_items / MAX_ROWS_PER_PAGE)
-    if num_pages == 0: num_pages = 1
-    
-    for page in range(num_pages):
-        pdf.add_page()
-        
-        # --- HEADER ---
-        for ext in ['png', 'jpg', 'jpeg']:
-            if os.path.exists(f"logo.{ext}"):
-                pdf.image(f"logo.{ext}", x=15, y=10, w=25)
-                break
-                
-        pdf.set_xy(45, 10)
-        pdf.set_font(use_f, 'B', 18)
-        pdf.cell(0, 8, f"{d['my_comp']}", 0, 1, 'L')
-        
-        pdf.set_x(45)
-        pdf.set_font(use_f, '', 14)
-        pdf.multi_cell(100, 6, f"{d['my_addr']}\nโทร: {d['my_tel']} แฟกซ์: {d['my_fax']}\nเลขผู้เสียภาษี: {d['my_tax']}", 0, 'L')
-
-        # Doc No Box
-        pdf.set_xy(140, 10)
-        pdf.set_font(use_f, 'B', 14)
-        pdf.cell(55, 20, "", 1, 0)
-        pdf.set_xy(142, 13)
-        pdf.cell(50, 6, f"เลขที่: {d['doc_no']}", 0, 1, 'L')
-        pdf.set_x(142)
-        pdf.cell(50, 6, f"วันที่: {d['doc_date']}", 0, 1, 'L')
-        pdf.set_xy(142, 25)
-        pdf.set_font(use_f, '', 12)
-        pdf.cell(50, 4, f"หน้า {page+1} / {num_pages}", 0, 1, 'R')
-
-        # Title (Dynamic)
-        pdf.set_y(45)
-        pdf.set_font(use_f, 'B', 26)
-        pdf.cell(0, 10, doc_title, 0, 1, 'C')
-
-        # Customer Info
-        pdf.set_y(60)
-        start_y = pdf.get_y()
-        
-        pdf.set_font(use_f, '', 14)
-        # ลูกค้า
-        pdf.set_font(use_f, 'B', 14)
-        pdf.cell(15, 7, "ลูกค้า: ", 0, 0)
-        pdf.set_font(use_f, '', 14)
-        pdf.cell(0, 7, f"{d['c_name']}", 0, 1)
-        
-        # ผู้ติดต่อ
-        pdf.set_x(15)
-        pdf.set_font(use_f, 'B', 14)
-        pdf.cell(20, 7, "ผู้ติดต่อ: ", 0, 0)
-        pdf.set_font(use_f, '', 14)
-        pdf.cell(0, 7, f"{d['contact']}", 0, 1)
-        
-        # ที่อยู่ / โทร / แฟกซ์
-        pdf.set_x(15)
-        pdf.multi_cell(110, 6, f"ที่อยู่: {d['c_addr']}\nโทร: {d['c_tel']} แฟกซ์: {d['c_fax']}", 0, 'L')
-        
-        pdf.set_xy(135, start_y)
-        pdf.multi_cell(65, 7, 
-            f"กำหนดส่ง: {d['due_date']}\n"
-            f"ยืนราคา: {d['valid_days']} วัน\n"
-            f"เครดิต: {d['credit']} วัน\n"
-            f"ครบกำหนด: {d['exp_date']}", 
-            0, 'L')
-
-        # --- TABLE ---
-        pdf.set_y(90)
-        cols_w = [12, 73, 15, 15, 25, 15, 25] 
-        headers = ["ลำดับ", "รายการสินค้า", "จำนวน", "หน่วย", "ราคา/หน่วย", "ส่วนลด", "จำนวนเงิน"]
-        
-        pdf.set_fill_color(240, 240, 240)
-        pdf.set_font(use_f, 'B', 13)
-        for i, h in enumerate(headers):
-            pdf.cell(cols_w[i], 9, h, 1, 0, 'C', True)
-        pdf.ln()
-
-        pdf.set_font(use_f, '', 13)
-        row_height = 8 
-        
-        start_idx = page * MAX_ROWS_PER_PAGE
-        end_idx = start_idx + MAX_ROWS_PER_PAGE
-        page_items = valid_items.iloc[start_idx:end_idx]
-        
-        rows_to_print = MAX_ROWS_PER_PAGE 
-        
-        for i in range(rows_to_print):
-            current_item_idx = start_idx + i
-            
-            if i < len(page_items):
-                row = page_items.iloc[i]
-                q = to_int(row.get('จำนวน'))
-                p = to_int(row.get('ราคา'))
-                dis = to_int(row.get('ส่วนลด'))
-                total = int(round((q * p) - dis))
-                
-                vals = [
-                    str(current_item_idx + 1),
-                    str(row.get('รายการ')),
-                    f"{q:,.0f}",
-                    str(row.get('หน่วย')),
-                    f"{p:,.0f}",
-                    f"{dis:,.0f}" if dis > 0 else "-",
-                    f"{total:,.0f}"
-                ]
-            else:
-                vals = ["", "", "", "", "", "", ""]
-            
-            for j, txt in enumerate(vals):
-                align = 'C'
-                if j == 1: align = 'L'
-                pdf.cell(cols_w[j], row_height, txt, 1, 0, align)
-            pdf.ln()
-
-        # --- SUMMARY (Only on Last Page) ---
-        if page == num_pages - 1:
-            pdf.ln(2)
-            current_y = pdf.get_y()
-            
-            # --- ส่วนหมายเหตุ ---
-            pdf.set_xy(15, current_y)
-            pdf.set_font(use_f, 'B', 14)
-            pdf.cell(0, 7, "หมายเหตุ / Remarks:", 0, 1)
-            pdf.set_font(use_f, '', 13)
-            pdf.multi_cell(90, 5, remark_text, 0, 'L')
-            
-            # --- ส่วนตัวเลขสรุป ---
-            sum_x_label = 130 
-            sum_x_val = 170   
-            sum_y = current_y
-            
-            def print_sum_row(label, value, bold=False, line=False):
-                nonlocal sum_y
-                pdf.set_xy(sum_x_label, sum_y)
-                pdf.set_font(use_f, 'B' if bold else '', 13)
-                pdf.cell(40, 6, label, 0, 0, 'R')
-                pdf.set_xy(sum_x_val, sum_y)
-                pdf.cell(25, 6, f"{value:,.0f}", 'B' if line else 0, 1, 'R')
-                sum_y += 6
-
-            print_sum_row("รวมเงินสินค้า:", summary['gross'])
-            print_sum_row("หักส่วนลด:", summary['discount'])
-            print_sum_row("ยอดหลังหักส่วนลด:", summary['subtotal'])
-            
-            if show_vat_line:
-                print_sum_row("ภาษีมูลค่าเพิ่ม 7%:", summary['vat'])
-            
-            grand_total_val = summary['grand_total']
-            baht_text_str = bahttext(grand_total_val)
-            
-            pdf.set_xy(110, sum_y)
-            pdf.set_font(use_f, 'B', 13)
-            pdf.cell(40, 6, "ยอดรวมสุทธิ:", 0, 0, 'R')
-            
-            pdf.set_xy(150, sum_y)
-            full_str = f"{grand_total_val:,.2f}  ({baht_text_str})"
-            pdf.cell(45, 6, full_str, 0, 1, 'R')
-
-            # --- SIGNATURES ---
-            pdf.set_y(-35) 
-            pdf.set_font(use_f, '', 13)
-            
-            sig_labels = ["ผู้สั่งซื้อสินค้า", "พนักงานขาย", "ผู้อนุมัติ"]
-            names = [sigs['s1'], sigs['s2'], sigs['s3']]
-            x_positions = [20, 85, 150]
-            
-            y_sig = pdf.get_y()
-            
-            for i in range(3):
-                pdf.set_xy(x_positions[i], y_sig)
-                pdf.cell(40, 6, "........................................", 0, 1, 'C')
-                pdf.set_xy(x_positions[i], y_sig + 6)
-                pdf.cell(40, 6, sig_labels[i], 0, 1, 'C')
-                pdf.set_xy(x_positions[i], y_sig + 12)
-                disp = f"({names[i]})" if names[i] else "(........................................)"
-                pdf.cell(40, 6, disp, 0, 1, 'C')
-                pdf.set_xy(x_positions[i], y_sig + 18)
-                pdf.cell(40, 6, "วันที่ ...../...../..........", 0, 1, 'C')
-
-    return bytes(pdf.output())
-
-# --- ฟังก์ชันช่วยเหลือสำหรับแปลง PDF เป็นรูปภาพ ---
-def convert_pdf_to_image(pdf_bytes, format_type):
-    if not HAS_IMG_LIB:
-        return None, "กรุณาติดตั้งไลบรารีเพิ่มเติม: pip install PyMuPDF Pillow"
-    try:
-        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-        images = []
-        for page in doc:
-            pix = page.get_pixmap(dpi=150)
-            img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-            images.append(img)
-        
-        if not images:
-            return None, "ไม่สามารถอ่านหน้า PDF ได้"
-            
-        # นำรูปภาพของแต่ละหน้ามาต่อกันเป็นรูปเดียว (บนลงล่าง)
-        widths, heights = zip(*(i.size for i in images))
-        max_width = max(widths)
-        total_height = sum(heights)
-        
-        new_im = Image.new('RGB', (max_width, total_height), (255, 255, 255))
-        y_offset = 0
-        for im in images:
-            new_im.paste(im, (0, y_offset))
-            y_offset += im.size[1]
-            
-        img_byte_arr = io.BytesIO()
-        pil_format = "JPEG" if format_type.upper() == "JPG" else "PNG"
-        new_im.save(img_byte_arr, format=pil_format)
-        return img_byte_arr.getvalue(), None
-    except Exception as e:
-        return None, str(e)
-
-
-# ==========================================
-# 5. USER INTERFACE
+# 3. USER INTERFACE
 # ==========================================
 
 # --- ฟังก์ชันช่วยเหลือสำหรับแสดง PDF ---
@@ -723,7 +352,7 @@ with tab1:
         else:
             st.session_state.grid_df = edited_df
 
-    # Calculation Logic (ทำหน้าที่คำนวณ ไม่แสดงผล UI ไม่จำเป็นต้องอยู่ใน Expander)
+    # Calculation Logic
     calc_df = edited_df.copy()
     calc_df['q'] = calc_df['จำนวน'].apply(to_int)
     calc_df['p'] = calc_df['ราคา'].apply(to_int)
