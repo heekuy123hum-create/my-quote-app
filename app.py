@@ -204,7 +204,7 @@ def display_pdf(pdf_bytes):
 
 def clear_all_data():
     st.session_state.grid_df = pd.DataFrame([{"รหัสสินค้า": "", "รายการ": "", "จำนวน": 0, "หน่วย": "", "ราคา": 0, "ส่วนลด": 0}] * 15)
-    reset_keys = ["c_name_in", "contact_in", "c_addr_in", "c_tel_in", "c_fax_in", "remark_in", "s1_in", "s2_in", "s3_in"]
+    reset_keys = ["c_name_in", "contact_in", "c_addr_in", "c_tel_in", "c_fax_in", "remark_in", "s1_in", "s2_in", "s3_in", "img1_in", "img2_in", "img3_in"]
     for k in reset_keys:
         if k in st.session_state: st.session_state[k] = ""
     st.session_state["cust_selector_tab1"] = "-- พิมพ์เอง --"
@@ -373,9 +373,15 @@ with tab1:
             
             st.markdown("<br>", unsafe_allow_html=True)
             s1, s2, s3 = st.columns(3)
-            with s1: st.text_input("ผู้สั่งซื้อ", key="s1_in")
-            with s2: st.text_input("พนักงานขาย", key="s2_in")
-            with s3: st.text_input("ผู้อนุมัติ", key="s3_in")
+            with s1:
+                st.text_input("ผู้สั่งซื้อ", key="s1_in")
+                st.file_uploader("ลายเซ็น", type=["png", "jpg", "jpeg"], key="img1_in", label_visibility="collapsed")
+            with s2:
+                st.text_input("พนักงานขาย", key="s2_in")
+                st.file_uploader("ลายเซ็น", type=["png", "jpg", "jpeg"], key="img2_in", label_visibility="collapsed")
+            with s3:
+                st.text_input("ผู้อนุมัติ", key="s3_in")
+                st.file_uploader("ลายเซ็น", type=["png", "jpg", "jpeg"], key="img3_in", label_visibility="collapsed")
 
         with f_col2:
             # Grand Total Card
@@ -460,10 +466,20 @@ with tab1:
                     "c_addr": st.session_state.c_addr_in, "c_tel": st.session_state.c_tel_in, "c_fax": st.session_state.c_fax_in
                 }
                 
+                # รวบรวมข้อมูลลายเซ็นเพื่อส่งให้ pdf_generator
+                sigs = {
+                    's1': st.session_state.s1_in,
+                    's2': st.session_state.s2_in,
+                    's3': st.session_state.s3_in,
+                    'img1': st.session_state.get('img1_in'),
+                    'img2': st.session_state.get('img2_in'),
+                    'img3': st.session_state.get('img3_in')
+                }
+                
                 pdf_bytes = create_pdf(
                     pdf_data, calc_df, 
                     {"gross": sum_gross, "discount": sum_disc, "subtotal": sum_sub, "vat": vat_val, "grand_total": grand_total},
-                    {"s1": st.session_state.s1_in, "s2": st.session_state.s2_in, "s3": st.session_state.s3_in},
+                    sigs,
                     st.session_state.remark_in, has_vat,
                     doc_title="ใบเสนอราคา (QUOTATION)"
                 )
