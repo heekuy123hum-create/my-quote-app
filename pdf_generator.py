@@ -1,5 +1,6 @@
 import os
 import io
+import tempfile
 from fpdf import FPDF
 from bahttext import bahttext 
 from database import to_int
@@ -199,16 +200,37 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line, doc_title
             pdf.cell(45, 6, full_str, 0, 1, 'R')
 
             # --- SIGNATURES ---
-            pdf.set_y(-35) 
+            # ขยับแกน Y ขึ้นมานิดหน่อยเพื่อเผื่อพื้นที่ให้รูปภาพลายเซ็น
+            pdf.set_y(-42) 
             pdf.set_font(use_f, '', 13)
             
             sig_labels = ["ผู้สั่งซื้อสินค้า", "พนักงานขาย", "ผู้อนุมัติ"]
-            names = [sigs['s1'], sigs['s2'], sigs['s3']]
-            x_positions = [20, 85, 150]
             
+            # รับค่าชื่อและรูปภาพจาก dictionary sigs (ใช้ .get() เพื่อป้องกัน Error หากไม่มีค่า)
+            names = [sigs.get('s1', ''), sigs.get('s2', ''), sigs.get('s3', '')]
+            images = [sigs.get('img1'), sigs.get('img2'), sigs.get('img3')]
+            
+            x_positions = [20, 85, 150]
             y_sig = pdf.get_y()
             
             for i in range(3):
+                # ถ้ามีการอัปโหลดรูปภาพลายเซ็นมา
+                if images[i]:
+                    try:
+                        # ตรวจสอบว่ารูปภาพมาจาก Streamlit UploadedFile หรือไม่
+                        if hasattr(images[i], 'read'):
+                            # สร้างไฟล์ชั่วคราวเพื่อนำไปวางใน PDF
+                            with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
+                                tmp.write(images[i].getvalue())
+                                tmp_path = tmp.name
+                            
+                            # วางรูปลงบน PDF เหนือเส้นประพอดี (ความกว้าง 30 ความสูง 12)
+                            pdf.image(tmp_path, x=x_positions[i] + 5, y=y_sig - 12, w=30, h=12)
+                            os.remove(tmp_path) # ลบไฟล์ชั่วคราวทิ้ง
+                    except Exception:
+                        pass # ข้ามไปหากไม่สามารถโหลดรูปได้
+
+                # วาดเส้นประและข้อความตามปกติ
                 pdf.set_xy(x_positions[i], y_sig)
                 pdf.cell(40, 6, "........................................", 0, 1, 'C')
                 pdf.set_xy(x_positions[i], y_sig + 6)
