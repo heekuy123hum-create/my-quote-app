@@ -18,6 +18,11 @@ def load_data():
                 # ตรวจสอบคอลัมน์ "ลบ" ถ้าไม่มีให้เพิ่ม
                 if 'ลบ' not in temp_df.columns:
                     temp_df.insert(0, 'ลบ', False)
+                
+                # ลบคอลัมน์ แฟกซ์ ทิ้งเพื่อไม่ให้รบกวนระบบ (เผื่อมีค้างในไฟล์ CSV เก่า)
+                if 'แฟกซ์' in temp_df.columns:
+                    temp_df = temp_df.drop(columns=['แฟกซ์'])
+                    
                 st.session_state.db_customers = temp_df
             except:
                 st.session_state.db_customers = pd.DataFrame(columns=["ลบ", "รหัส", "ชื่อบริษัท", "ผู้ติดต่อ", "ที่อยู่", "โทร"])
@@ -47,27 +52,39 @@ def load_data():
             st.session_state.db_products = pd.DataFrame([
                 {"ลบ": False, "รหัสสินค้า": "P001", "รายการ": "สินค้าตัวอย่าง", "ราคา": 1000, "หน่วย": "ชิ้น"}
             ])
+        
+        # Ensure boolean type for checkbox
+        st.session_state.db_products['ลบ'] = st.session_state.db_products['ลบ'].fillna(False).astype(bool)
 
-    # --- 3. โหลดประวัติเอกสาร ---
+    # --- 3. โหลดประวัติ ---
     if "db_history" not in st.session_state:
         if os.path.exists(HISTORY_FILE):
             try:
-                temp_df_h = pd.read_csv(HISTORY_FILE, encoding='utf-8-sig')
-                if 'Unnamed: 0' in temp_df_h.columns: temp_df_h = temp_df_h.drop(columns=['Unnamed: 0'])
-                if 'ลบ' not in temp_df_h.columns:
-                    temp_df_h.insert(0, 'ลบ', False)
-                st.session_state.db_history = temp_df_h
+                temp_hist = pd.read_csv(HISTORY_FILE, encoding='utf-8-sig')
+                if 'ลบ' not in temp_hist.columns: temp_hist.insert(0, 'ลบ', False)
+                if 'Unnamed: 0' in temp_hist.columns: temp_hist = temp_hist.drop(columns=['Unnamed: 0'])
+                st.session_state.db_history = temp_hist
             except:
-                st.session_state.db_history = pd.DataFrame(columns=["ลบ", "doc_no", "date", "c_name", "total", "data_json"])
+                st.session_state.db_history = pd.DataFrame(columns=["ลบ", "timestamp", "doc_no", "customer", "total", "data_json"])
         else:
-            st.session_state.db_history = pd.DataFrame(columns=["ลบ", "doc_no", "date", "c_name", "total", "data_json"])
+            st.session_state.db_history = pd.DataFrame(columns=["ลบ", "timestamp", "doc_no", "customer", "total", "data_json"])
 
 def save_data(df, filename, key_col=None):
     df_to_save = df.copy()
+    
+    # Logic: กรองเฉพาะแถวที่ไม่ได้ติ๊ก "ลบ" และข้อมูลไม่ว่างเปล่า
     if 'ลบ' in df_to_save.columns:
         df_to_save = df_to_save[df_to_save['ลบ'] == False]
-        df_to_save = df_to_save.drop(columns=['ลบ'])
+        # รีเซ็ตค่าลบเป็น False เผื่อไว้ (แต่จริงๆ ถูกกรองออกไปแล้ว)
+        df_to_save['ลบ'] = False
+
+    if key_col and key_col in df_to_save.columns:
+         df_to_save = df_to_save[df_to_save[key_col].astype(str).str.strip() != ""]
+         
+    if 'Unnamed: 0' in df_to_save.columns:
+        df_to_save = df_to_save.drop(columns=['Unnamed: 0'])
         
+    df_to_save = df_to_save.reset_index(drop=True)
     df_to_save.to_csv(filename, index=False, encoding='utf-8-sig')
     return df_to_save
 
@@ -98,18 +115,18 @@ def generate_doc_no(prefix_type="QT"):
     
     if matched_docs.empty:
         return f"{prefix}-001"
-        
-    # ดึงเลข Running ออกมา
-    last_run = 0
+    
+    # หาเลขรันสูงสุดแล้วบวก 1
+    max_run = 0
     for doc in matched_docs['doc_no']:
-        parts = doc.split('-')
-        if len(parts) == 3:
-            try:
-                num = int(parts[2])
-                if num > last_run:
-                    last_run = num
-            except:
-                pass
-                
-    next_run = last_run + 1
-    return f"{prefix}-{next_run:03d}"
+        try:
+            # format: PREFIX-YYYYMMDD-XXX
+            parts = doc.split('-')
+            if len(parts) >= 3:
+                run_num = int(parts[-1])
+                if run_num > max_run:
+                    max_run = run_num
+        except:
+            pass
+            
+    return f"{prefix}-{max_run + 1:03d}"
