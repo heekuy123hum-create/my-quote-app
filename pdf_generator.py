@@ -47,25 +47,27 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line, doc_title
         pdf.add_page()
         
         # --- HEADER ---
+        # 1. แสดงโลโก้ด้านบนซ้าย
         if os.path.exists("logo11.jpg"):
             pdf.image("logo11.jpg", x=15, y=10, w=25)
                 
         pdf.set_xy(45, 10)
         pdf.set_font(use_f, 'B', 18)
-        pdf.cell(0, 8, f"{d['my_comp']}", 0, 1, 'L')
+        pdf.cell(0, 8, f"{d.get('my_comp', '')}", 0, 1, 'L')
         
+        # 2. เอาแฟกซ์ออก เหลือแค่ที่อยู่ โทร และเลขผู้เสียภาษี
         pdf.set_x(45)
         pdf.set_font(use_f, '', 14)
-        pdf.multi_cell(100, 6, f"{d['my_addr']}\nโทร: {d['my_tel']}\nเลขผู้เสียภาษี: {d['my_tax']}", 0, 'L')
+        pdf.multi_cell(100, 6, f"{d.get('my_addr', '')}\nโทร: {d.get('my_tel', '')}\nเลขผู้เสียภาษี: {d.get('my_tax', '')}", 0, 'L')
 
         # Doc No Box
         pdf.set_xy(140, 10)
         pdf.set_font(use_f, 'B', 14)
         pdf.cell(55, 20, "", 1, 0)
         pdf.set_xy(142, 13)
-        pdf.cell(50, 6, f"เลขที่: {d['doc_no']}", 0, 1, 'L')
+        pdf.cell(50, 6, f"เลขที่: {d.get('doc_no', '')}", 0, 1, 'L')
         pdf.set_x(142)
-        pdf.cell(50, 6, f"วันที่: {d['doc_date']}", 0, 1, 'L')
+        pdf.cell(50, 6, f"วันที่: {d.get('doc_date', '')}", 0, 1, 'L')
         pdf.set_xy(142, 25)
         pdf.set_font(use_f, '', 12)
         pdf.cell(50, 4, f"หน้า {page+1} / {num_pages}", 0, 1, 'R')
@@ -84,24 +86,25 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line, doc_title
         pdf.set_font(use_f, 'B', 14)
         pdf.cell(15, 7, "ลูกค้า: ", 0, 0)
         pdf.set_font(use_f, '', 14)
-        pdf.cell(0, 7, f"{d['c_name']}", 0, 1)
+        pdf.cell(0, 7, f"{d.get('c_name', '')}", 0, 1)
         
         # ผู้ติดต่อ
         pdf.set_x(15)
         pdf.set_font(use_f, 'B', 14)
         pdf.cell(20, 7, "ผู้ติดต่อ: ", 0, 0)
         pdf.set_font(use_f, '', 14)
-        pdf.cell(0, 7, f"{d['contact']}", 0, 1)
+        pdf.cell(0, 7, f"{d.get('contact', '')}", 0, 1)
         
-        # ที่อยู่ / โทร 
+        # ที่อยู่ / โทร (ไม่มีแฟกซ์ลูกค้า)
         pdf.set_x(15)
-        pdf.multi_cell(110, 6, f"ที่อยู่: {d['c_addr']}\nโทร: {d['c_tel']}", 0, 'L')
+        pdf.multi_cell(110, 6, f"ที่อยู่: {d.get('c_addr', '')}\nโทร: {d.get('c_tel', '')}", 0, 'L')
         
+        # ข้อมูลยืนราคา กำหนดส่ง (ไม่มีเครดิต)
         pdf.set_xy(135, start_y)
         pdf.multi_cell(65, 7, 
-            f"กำหนดส่ง: {d['due_date']}\n"
-            f"ยืนราคา: {d['valid_days']} วัน\n"
-            f"ครบกำหนด: {d['exp_date']}", 
+            f"กำหนดส่ง: {d.get('due_date', '')}\n"
+            f"ยืนราคา: {d.get('valid_days', '')} วัน\n"
+            f"ครบกำหนด: {d.get('exp_date', '')}", 
             0, 'L')
 
         # --- TABLE ---
@@ -188,9 +191,10 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line, doc_title
             grand_total_val = summary['grand_total']
             baht_text_str = bahttext(grand_total_val)
             
-            # ย้ายตัวหนังสือภาษาไทยมาไว้ตรงกลาง-ซ้าย เพื่อไม่ให้ขี่ทับกับตัวเลขด้านขวาแบบชัวร์ๆ
+            # 3. ย้ายตัวหนังสือภาษาไทยมาไว้ตรงกลาง-ซ้าย เพื่อไม่ให้ขี่ทับกับตัวเลขด้านขวาแบบชัวร์ๆ
             pdf.set_xy(15, sum_y)
             pdf.set_font(use_f, 'B', 13)
+            # ล็อกความกว้างไว้ที่ 115 ป้องกันไม่ให้ทะลุไปฝั่งขวา
             pdf.cell(115, 6, f"({baht_text_str})", 0, 0, 'C')
             
             pdf.set_xy(130, sum_y)
@@ -204,16 +208,18 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line, doc_title
             pdf.set_y(-42) 
             pdf.set_font(use_f, '', 13)
             
-            sig_labels = ["ผู้สั่งซื้อสินค้า", "พนักงานขาย", "ผู้อนุมัติ"]
+            # 4. เปลี่ยนให้เหลือ 2 ลายเซ็น: ผู้จัดทำ และ ผู้อนุมัติ
+            sig_labels = ["ผู้จัดทำ", "ผู้อนุมัติ"]
             
-            # รับค่าชื่อและรูปภาพจาก dictionary sigs (ใช้ .get() เพื่อป้องกัน Error หากไม่มีค่า)
-            names = [sigs.get('s1', ''), sigs.get('s2', ''), sigs.get('s3', '')]
-            images = [sigs.get('img1'), sigs.get('img2'), sigs.get('img3')]
+            # ดึงเฉพาะ 2 ค่า
+            names = [sigs.get('s1', ''), sigs.get('s2', '')]
+            images = [sigs.get('img1'), sigs.get('img2')]
             
-            x_positions = [20, 85, 150]
+            # จัดตำแหน่ง 2 ช่องให้สมดุลซ้าย-ขวา
+            x_positions = [40, 130]
             y_sig = pdf.get_y()
             
-            for i in range(3):
+            for i in range(2):
                 # ถ้ามีการอัปโหลดรูปภาพลายเซ็นมา
                 if images[i]:
                     try:
