@@ -47,10 +47,8 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line, doc_title
         pdf.add_page()
         
         # --- HEADER ---
-        for ext in ['png', 'jpg', 'jpeg']:
-            if os.path.exists(f"logo.{ext}"):
-                pdf.image(f"logo.{ext}", x=15, y=10, w=25)
-                break
+        if os.path.exists("logo11.jpg"):
+            pdf.image("logo11.jpg", x=15, y=10, w=25)
                 
         pdf.set_xy(45, 10)
         pdf.set_font(use_f, 'B', 18)
@@ -58,7 +56,7 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line, doc_title
         
         pdf.set_x(45)
         pdf.set_font(use_f, '', 14)
-        pdf.multi_cell(100, 6, f"{d['my_addr']}\nโทร: {d['my_tel']} แฟกซ์: {d['my_fax']}\nเลขผู้เสียภาษี: {d['my_tax']}", 0, 'L')
+        pdf.multi_cell(100, 6, f"{d['my_addr']}\nโทร: {d['my_tel']}\nเลขผู้เสียภาษี: {d['my_tax']}", 0, 'L')
 
         # Doc No Box
         pdf.set_xy(140, 10)
@@ -95,15 +93,14 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line, doc_title
         pdf.set_font(use_f, '', 14)
         pdf.cell(0, 7, f"{d['contact']}", 0, 1)
         
-        # ที่อยู่ / โทร / แฟกซ์
+        # ที่อยู่ / โทร 
         pdf.set_x(15)
-        pdf.multi_cell(110, 6, f"ที่อยู่: {d['c_addr']}\nโทร: {d['c_tel']} แฟกซ์: {d['c_fax']}", 0, 'L')
+        pdf.multi_cell(110, 6, f"ที่อยู่: {d['c_addr']}\nโทร: {d['c_tel']}", 0, 'L')
         
         pdf.set_xy(135, start_y)
         pdf.multi_cell(65, 7, 
             f"กำหนดส่ง: {d['due_date']}\n"
             f"ยืนราคา: {d['valid_days']} วัน\n"
-            f"เครดิต: {d['credit']} วัน\n"
             f"ครบกำหนด: {d['exp_date']}", 
             0, 'L')
 
@@ -191,13 +188,16 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line, doc_title
             grand_total_val = summary['grand_total']
             baht_text_str = bahttext(grand_total_val)
             
-            pdf.set_xy(110, sum_y)
+            # ย้ายตัวหนังสือภาษาไทยมาไว้ตรงกลาง-ซ้าย เพื่อไม่ให้ขี่ทับกับตัวเลขด้านขวาแบบชัวร์ๆ
+            pdf.set_xy(15, sum_y)
             pdf.set_font(use_f, 'B', 13)
+            pdf.cell(115, 6, f"({baht_text_str})", 0, 0, 'C')
+            
+            pdf.set_xy(130, sum_y)
             pdf.cell(40, 6, "ยอดรวมสุทธิ:", 0, 0, 'R')
             
-            pdf.set_xy(150, sum_y)
-            full_str = f"{grand_total_val:,.2f}  ({baht_text_str})"
-            pdf.cell(45, 6, full_str, 0, 1, 'R')
+            pdf.set_xy(170, sum_y)
+            pdf.cell(25, 6, f"{grand_total_val:,.2f}", 0, 1, 'R')
 
             # --- SIGNATURES ---
             # ขยับแกน Y ขึ้นมานิดหน่อยเพื่อเผื่อพื้นที่ให้รูปภาพลายเซ็น
