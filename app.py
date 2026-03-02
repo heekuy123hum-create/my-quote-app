@@ -204,7 +204,8 @@ def display_pdf(pdf_bytes):
 
 def clear_all_data():
     st.session_state.grid_df = pd.DataFrame([{"รหัสสินค้า": "", "รายการ": "", "จำนวน": 0, "หน่วย": "", "ราคา": 0, "ส่วนลด": 0}] * 15)
-    reset_keys = ["c_name_in", "contact_in", "c_addr_in", "c_tel_in", "remark_in", "s1_in", "s2_in", "s3_in", "img1_in", "img2_in", "img3_in"]
+    # ลบตัวแปร s3_in และ img3_in ออกจากการเคลียร์
+    reset_keys = ["c_name_in", "contact_in", "c_addr_in", "c_tel_in", "remark_in", "s1_in", "s2_in", "img1_in", "img2_in"]
     for k in reset_keys:
         if k in st.session_state: st.session_state[k] = ""
     st.session_state["cust_selector_tab1"] = "-- พิมพ์เอง --"
@@ -366,17 +367,15 @@ with tab1:
             st.markdown("##### 📝 หมายเหตุ & การอนุมัติ")
             st.text_area("หมายเหตุ (Remarks)", value="1. ราคายังไม่รวม VAT 7%\n2. กำหนดยืนราคา 30 วัน", key="remark_in", height=100, label_visibility="collapsed")
             
+            # --- แก้ไขส่วนลายเซ็นให้เหลือ 2 ช่อง ตามสั่ง ---
             st.markdown("<br>", unsafe_allow_html=True)
-            s1, s2, s3 = st.columns(3)
+            s1, s2 = st.columns(2)
             with s1:
-                st.text_input("ผู้สั่งซื้อ", key="s1_in")
+                st.text_input("ผู้จัดทำ", key="s1_in")
                 st.file_uploader("ลายเซ็น", type=["png", "jpg", "jpeg"], key="img1_in", label_visibility="collapsed")
             with s2:
-                st.text_input("พนักงานขาย", key="s2_in")
+                st.text_input("ผู้อนุมัติ", key="s2_in")
                 st.file_uploader("ลายเซ็น", type=["png", "jpg", "jpeg"], key="img2_in", label_visibility="collapsed")
-            with s3:
-                st.text_input("ผู้อนุมัติ", key="s3_in")
-                st.file_uploader("ลายเซ็น", type=["png", "jpg", "jpeg"], key="img3_in", label_visibility="collapsed")
 
         with f_col2:
             # Grand Total Card
@@ -466,9 +465,14 @@ with tab1:
                     "c_addr": st.session_state.c_addr_in, "c_tel": st.session_state.c_tel_in
                 }
                 
+                # ส่งค่า sigs แค่ 2 คน ส่วนคนที่ 3 ส่งเป็นว่างเปล่าไปเลยเพื่อไม่ให้เกิด Error ใน PDF Generator
                 sigs = {
-                    "s1": st.session_state.s1_in, "s2": st.session_state.s2_in, "s3": st.session_state.s3_in,
-                    "img1": st.session_state.img1_in, "img2": st.session_state.img2_in, "img3": st.session_state.img3_in
+                    "s1": st.session_state.get("s1_in", ""), 
+                    "s2": st.session_state.get("s2_in", ""), 
+                    "s3": "",
+                    "img1": st.session_state.get("img1_in", None), 
+                    "img2": st.session_state.get("img2_in", None), 
+                    "img3": None
                 }
                 
                 pdf_bytes = create_pdf(
