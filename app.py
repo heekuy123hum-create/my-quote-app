@@ -326,13 +326,11 @@ with tab1:
     # 3. Items Table
     with st.expander("📦 รายการสินค้า (Items)", expanded=True):
         
-        prod_opts = st.session_state.db_products['รหัสสินค้า'].astype(str).unique().tolist()
-        
-        # --- เปลี่ยนตารางให้ช่องรหัสสินค้าสามารถพิมพ์เองได้อิสระ ---
+        # --- ใช้ TextColumn เพื่อให้พิมพ์ได้อิสระ ตามทางเลือก A ---
         edited_df = st.data_editor(
             st.session_state.grid_df,
             column_config={
-                "รหัสสินค้า": st.column_config.TextColumn("รหัส", width="medium"), # แก้ไขให้พิมพ์เองได้
+                "รหัสสินค้า": st.column_config.TextColumn("รหัส", width="medium"),
                 "รายการ": st.column_config.TextColumn("รายการสินค้า", width="large"),
                 "จำนวน": st.column_config.NumberColumn("จำนวน", min_value=0.0, format="%.2f", step=0.01),
                 "ราคา": st.column_config.NumberColumn("ราคา", min_value=0.0, format="%.2f", step=0.01),
@@ -344,17 +342,25 @@ with tab1:
             key="editor_main"
         )
 
-        # Auto-fill Logic: ถ้าพิมพ์รหัสตรงกับที่มี จะดึงข้อมูลมาให้
+        # Auto-fill Logic: ค้นหาแบบไม่สนพิมพ์เล็กพิมพ์ใหญ่ และปล่อยรหัสแปลกปลอมไว้
         needs_rerun = False
         for idx, row in edited_df.iterrows():
-            code = str(row['รหัสสินค้า']).strip()
-            if code and code in prod_opts:
-                info = st.session_state.db_products[st.session_state.db_products['รหัสสินค้า'] == code].iloc[0]
-                if str(row['รายการ']) != info['รายการ']:
-                    edited_df.at[idx, 'รายการ'] = info['รายการ']
-                    edited_df.at[idx, 'หน่วย'] = info['หน่วย']
-                    edited_df.at[idx, 'ราคา'] = float(info['ราคา'])
-                    needs_rerun = True
+            code_input = str(row['รหัสสินค้า']).strip()
+            if code_input:
+                # แปลงรหัสในตาราง Tab 3 ให้เป็นตัวเล็กทั้งหมดแล้วเทียบกับรหัสที่กรอกเข้ามา (แปลงเป็นตัวเล็กเหมือนกัน)
+                matched_rows = st.session_state.db_products[st.session_state.db_products['รหัสสินค้า'].astype(str).str.lower() == code_input.lower()]
+                
+                if not matched_rows.empty:
+                    info = matched_rows.iloc[0]
+                    exact_db_code = str(info['รหัสสินค้า']) # ใช้รูปแบบรหัสพิมพ์ใหญ่/เล็กที่ถูกต้องจากฐานข้อมูล
+                    
+                    if str(row['รหัสสินค้า']) != exact_db_code or str(row['รายการ']) != info['รายการ']:
+                        edited_df.at[idx, 'รหัสสินค้า'] = exact_db_code
+                        edited_df.at[idx, 'รายการ'] = info['รายการ']
+                        edited_df.at[idx, 'หน่วย'] = info['หน่วย']
+                        edited_df.at[idx, 'ราคา'] = float(info['ราคา'])
+                        needs_rerun = True
+                # ถ้าไม่เจอในฐานข้อมูล (matched_rows.empty เป็น True) ก็ปล่อยผ่านไปเลย ไม่ลบทิ้ง
         
         # อัพเดตเฉพาะตอนดึงข้อมูลสินค้าระบบอัตโนมัติ เพื่อป้องกันตารางเด้งตอนผู้ใช้พิมพ์เอง
         if needs_rerun:
