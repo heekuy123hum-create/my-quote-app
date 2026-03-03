@@ -15,8 +15,16 @@ except ImportError:
 
 FONT_PATH = "THSarabunNew.ttf" 
 
+# --- ฟังก์ชันช่วยเหลือสำหรับแปลงค่าเป็นทศนิยมเพื่อการแสดงผลใน PDF ---
+def to_f(val):
+    try:
+        if isinstance(val, str): val = val.replace(',', '')
+        return float(val) if val is not None else 0.0
+    except:
+        return 0.0
+
 # ==========================================
-# PDF ENGINE (Updated: doc_title support)
+# PDF ENGINE (Updated: รองรับทศนิยม 2 ตำแหน่ง)
 # ==========================================
 def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line, doc_title="ใบเสนอราคา (QUOTATION)"):
     pdf = FPDF(unit='mm', format='A4')
@@ -47,7 +55,7 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line, doc_title
         pdf.add_page()
         
         # --- HEADER ---
-        # 1. แสดงโลโก้ด้านบนซ้าย
+        # แสดงโลโก้ด้านบนซ้าย
         if os.path.exists("logo11.jpg"):
             pdf.image("logo11.jpg", x=15, y=10, w=25)
                 
@@ -55,7 +63,6 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line, doc_title
         pdf.set_font(use_f, 'B', 18)
         pdf.cell(0, 8, f"{d.get('my_comp', '')}", 0, 1, 'L')
         
-        # 2. เอาแฟกซ์ออก เหลือแค่ที่อยู่ โทร และเลขผู้เสียภาษี
         pdf.set_x(45)
         pdf.set_font(use_f, '', 14)
         pdf.multi_cell(100, 6, f"{d.get('my_addr', '')}\nโทร: {d.get('my_tel', '')}\nเลขผู้เสียภาษี: {d.get('my_tax', '')}", 0, 'L')
@@ -72,7 +79,7 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line, doc_title
         pdf.set_font(use_f, '', 12)
         pdf.cell(50, 4, f"หน้า {page+1} / {num_pages}", 0, 1, 'R')
 
-        # Title (Dynamic)
+        # Title
         pdf.set_y(45)
         pdf.set_font(use_f, 'B', 26)
         pdf.cell(0, 10, doc_title, 0, 1, 'C')
@@ -82,24 +89,20 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line, doc_title
         start_y = pdf.get_y()
         
         pdf.set_font(use_f, '', 14)
-        # ลูกค้า
         pdf.set_font(use_f, 'B', 14)
         pdf.cell(15, 7, "ลูกค้า: ", 0, 0)
         pdf.set_font(use_f, '', 14)
         pdf.cell(0, 7, f"{d.get('c_name', '')}", 0, 1)
         
-        # ผู้ติดต่อ
         pdf.set_x(15)
         pdf.set_font(use_f, 'B', 14)
         pdf.cell(20, 7, "ผู้ติดต่อ: ", 0, 0)
         pdf.set_font(use_f, '', 14)
         pdf.cell(0, 7, f"{d.get('contact', '')}", 0, 1)
         
-        # ที่อยู่ / โทร (ไม่มีแฟกซ์ลูกค้า)
         pdf.set_x(15)
         pdf.multi_cell(110, 6, f"ที่อยู่: {d.get('c_addr', '')}\nโทร: {d.get('c_tel', '')}", 0, 'L')
         
-        # ข้อมูลยืนราคา กำหนดส่ง (ไม่มีเครดิต)
         pdf.set_xy(135, start_y)
         pdf.multi_cell(65, 7, 
             f"กำหนดส่ง: {d.get('due_date', '')}\n"
@@ -107,7 +110,7 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line, doc_title
             f"ครบกำหนด: {d.get('exp_date', '')}", 
             0, 'L')
 
-        # --- TABLE ---
+        # --- TABLE (Updated for decimals) ---
         pdf.set_y(90)
         cols_w = [12, 73, 15, 15, 25, 15, 25] 
         headers = ["ลำดับ", "รายการสินค้า", "จำนวน", "หน่วย", "ราคา/หน่วย", "ส่วนลด", "จำนวนเงิน"]
@@ -125,26 +128,24 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line, doc_title
         end_idx = start_idx + MAX_ROWS_PER_PAGE
         page_items = valid_items.iloc[start_idx:end_idx]
         
-        rows_to_print = MAX_ROWS_PER_PAGE 
-        
-        for i in range(rows_to_print):
+        for i in range(MAX_ROWS_PER_PAGE):
             current_item_idx = start_idx + i
-            
             if i < len(page_items):
                 row = page_items.iloc[i]
-                q = to_int(row.get('จำนวน'))
-                p = to_int(row.get('ราคา'))
-                dis = to_int(row.get('ส่วนลด'))
-                total = int(round((q * p) - dis))
+                q = to_f(row.get('จำนวน'))
+                p = to_f(row.get('ราคา'))
+                dis = to_f(row.get('ส่วนลด'))
+                total = round((q * p) - dis, 2)
                 
+                # เปลี่ยนฟอร์แมตจาก :.0f เป็น :.2f เพื่อแสดงทศนิยม 2 ตำแหน่ง
                 vals = [
                     str(current_item_idx + 1),
                     str(row.get('รายการ')),
-                    f"{q:,.0f}",
+                    f"{q:,.2f}",
                     str(row.get('หน่วย')),
-                    f"{p:,.0f}",
-                    f"{dis:,.0f}" if dis > 0 else "-",
-                    f"{total:,.0f}"
+                    f"{p:,.2f}",
+                    f"{dis:,.2f}" if dis > 0 else "-",
+                    f"{total:,.2f}"
                 ]
             else:
                 vals = ["", "", "", "", "", "", ""]
@@ -160,14 +161,14 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line, doc_title
             pdf.ln(2)
             current_y = pdf.get_y()
             
-            # --- ส่วนหมายเหตุ ---
+            # ส่วนหมายเหตุ
             pdf.set_xy(15, current_y)
             pdf.set_font(use_f, 'B', 14)
             pdf.cell(0, 7, "หมายเหตุ / Remarks:", 0, 1)
             pdf.set_font(use_f, '', 13)
             pdf.multi_cell(90, 5, remark_text, 0, 'L')
             
-            # --- ส่วนตัวเลขสรุป ---
+            # ส่วนตัวเลขสรุป
             sum_x_label = 130 
             sum_x_val = 170   
             sum_y = current_y
@@ -178,7 +179,8 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line, doc_title
                 pdf.set_font(use_f, 'B' if bold else '', 13)
                 pdf.cell(40, 6, label, 0, 0, 'R')
                 pdf.set_xy(sum_x_val, sum_y)
-                pdf.cell(25, 6, f"{value:,.0f}", 'B' if line else 0, 1, 'R')
+                # ปรับให้แสดงทศนิยม 2 ตำแหน่งในยอดรวม
+                pdf.cell(25, 6, f"{value:,.2f}", 'B' if line else 0, 1, 'R')
                 sum_y += 6
 
             print_sum_row("รวมเงินสินค้า:", summary['gross'])
@@ -191,10 +193,9 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line, doc_title
             grand_total_val = summary['grand_total']
             baht_text_str = bahttext(grand_total_val)
             
-            # 3. ย้ายตัวหนังสือภาษาไทยมาไว้ตรงกลาง-ซ้าย เพื่อไม่ให้ขี่ทับกับตัวเลขด้านขวาแบบชัวร์ๆ
+            # จัดวางตัวหนังสือภาษาไทย
             pdf.set_xy(15, sum_y)
             pdf.set_font(use_f, 'B', 13)
-            # ล็อกความกว้างไว้ที่ 115 ป้องกันไม่ให้ทะลุไปฝั่งขวา
             pdf.cell(115, 6, f"({baht_text_str})", 0, 0, 'C')
             
             pdf.set_xy(130, sum_y)
@@ -203,40 +204,29 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line, doc_title
             pdf.set_xy(170, sum_y)
             pdf.cell(25, 6, f"{grand_total_val:,.2f}", 0, 1, 'R')
 
-            # --- SIGNATURES ---
-            # ขยับแกน Y ขึ้นมานิดหน่อยเพื่อเผื่อพื้นที่ให้รูปภาพลายเซ็น
+            # --- SIGNATURES (เหลือ 2 ช่อง ตามสั่ง) ---
             pdf.set_y(-42) 
             pdf.set_font(use_f, '', 13)
             
-            # 4. เปลี่ยนให้เหลือ 2 ลายเซ็น: ผู้จัดทำ และ ผู้อนุมัติ
             sig_labels = ["ผู้จัดทำ", "ผู้อนุมัติ"]
-            
-            # ดึงเฉพาะ 2 ค่า
             names = [sigs.get('s1', ''), sigs.get('s2', '')]
             images = [sigs.get('img1'), sigs.get('img2')]
             
-            # จัดตำแหน่ง 2 ช่องให้สมดุลซ้าย-ขวา
             x_positions = [40, 130]
             y_sig = pdf.get_y()
             
             for i in range(2):
-                # ถ้ามีการอัปโหลดรูปภาพลายเซ็นมา
                 if images[i]:
                     try:
-                        # ตรวจสอบว่ารูปภาพมาจาก Streamlit UploadedFile หรือไม่
                         if hasattr(images[i], 'read'):
-                            # สร้างไฟล์ชั่วคราวเพื่อนำไปวางใน PDF
                             with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
                                 tmp.write(images[i].getvalue())
                                 tmp_path = tmp.name
-                            
-                            # วางรูปลงบน PDF เหนือเส้นประพอดี (ความกว้าง 30 ความสูง 12)
                             pdf.image(tmp_path, x=x_positions[i] + 5, y=y_sig - 12, w=30, h=12)
-                            os.remove(tmp_path) # ลบไฟล์ชั่วคราวทิ้ง
-                    except Exception:
-                        pass # ข้ามไปหากไม่สามารถโหลดรูปได้
+                            os.remove(tmp_path)
+                    except:
+                        pass
 
-                # วาดเส้นประและข้อความตามปกติ
                 pdf.set_xy(x_positions[i], y_sig)
                 pdf.cell(40, 6, "........................................", 0, 1, 'C')
                 pdf.set_xy(x_positions[i], y_sig + 6)
@@ -261,15 +251,10 @@ def convert_pdf_to_image(pdf_bytes, format_type):
             img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
             images.append(img)
         
-        if not images:
-            return None, "ไม่สามารถอ่านหน้า PDF ได้"
+        if not images: return None, "ไม่สามารถอ่านหน้า PDF ได้"
             
-        # นำรูปภาพของแต่ละหน้ามาต่อกันเป็นรูปเดียว (บนลงล่าง)
         widths, heights = zip(*(i.size for i in images))
-        max_width = max(widths)
-        total_height = sum(heights)
-        
-        new_im = Image.new('RGB', (max_width, total_height), (255, 255, 255))
+        new_im = Image.new('RGB', (max(widths), sum(heights)), (255, 255, 255))
         y_offset = 0
         for im in images:
             new_im.paste(im, (0, y_offset))
