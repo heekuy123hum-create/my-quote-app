@@ -14,10 +14,18 @@ from bahttext import bahttext
 import base64
 
 # ==========================================
-# นำเข้าโมดูลจากไฟล์ที่แยกออกไป (เดี๋ยวเราจะสร้าง 2 ไฟล์นี้ทีหลัง)
+# นำเข้าโมดูลจากไฟล์ที่แยกออกไป
 # ==========================================
 from database import load_data, save_data, generate_doc_no, to_int, CUST_FILE, PROD_FILE, HISTORY_FILE
 from pdf_generator import create_pdf, convert_pdf_to_image
+
+# --- ฟังก์ชันช่วยเหลือสำหรับแปลงค่าเป็นทศนิยมเพื่อการคำนวณ ---
+def to_float(val):
+    try:
+        if isinstance(val, str): val = val.replace(',', '')
+        return float(val) if val is not None else 0.0
+    except:
+        return 0.0
 
 # ==========================================
 # 1. SYSTEM CONFIG & ASSETS
@@ -148,10 +156,10 @@ def load_lottieurl(url: str):
 lottie_office = load_lottieurl("https://lottie.host/5a8b7928-8924-4069-950c-1123533866b1/0XgV0lK1uF.json")
 lottie_success = load_lottieurl("https://assets9.lottiefiles.com/packages/lf20_ttv8K8.json")
 
-# เริ่มต้นตัวแปร Session State
+# เริ่มต้นตัวแปร Session State (แก้ไขค่าเริ่มต้นให้เป็น 0.0 รองรับทศนิยม)
 if "grid_df" not in st.session_state:
     st.session_state.grid_df = pd.DataFrame(
-        [{"รหัสสินค้า": "", "รายการ": "", "จำนวน": 0, "หน่วย": "", "ราคา": 0, "ส่วนลด": 0}] * 15
+        [{"รหัสสินค้า": "", "รายการ": "", "จำนวน": 0.0, "หน่วย": "", "ราคา": 0.0, "ส่วนลด": 0.0}] * 15
     )
 if "generated_pdf_bytes" not in st.session_state:
     st.session_state.generated_pdf_bytes = None
@@ -203,7 +211,7 @@ def display_pdf(pdf_bytes):
     st.markdown(pdf_display, unsafe_allow_html=True)
 
 def clear_all_data():
-    st.session_state.grid_df = pd.DataFrame([{"รหัสสินค้า": "", "รายการ": "", "จำนวน": 0, "หน่วย": "", "ราคา": 0, "ส่วนลด": 0}] * 15)
+    st.session_state.grid_df = pd.DataFrame([{"รหัสสินค้า": "", "รายการ": "", "จำนวน": 0.0, "หน่วย": "", "ราคา": 0.0, "ส่วนลด": 0.0}] * 15)
     # ลบตัวแปร s3_in และ img3_in ออกจากการเคลียร์
     reset_keys = ["c_name_in", "contact_in", "c_addr_in", "c_tel_in", "remark_in", "s1_in", "s2_in", "img1_in", "img2_in"]
     for k in reset_keys:
@@ -315,14 +323,15 @@ with tab1:
         
         prod_opts = st.session_state.db_products['รหัสสินค้า'].astype(str).unique().tolist()
         
+        # --- เปลี่ยนตารางให้รองรับจุดทศนิยม 2 ตำแหน่ง ---
         edited_df = st.data_editor(
             st.session_state.grid_df,
             column_config={
                 "รหัสสินค้า": st.column_config.SelectboxColumn("รหัส", options=prod_opts, width="medium"),
                 "รายการ": st.column_config.TextColumn("รายการสินค้า", width="large"),
-                "จำนวน": st.column_config.NumberColumn("จำนวน", min_value=0, format="%.0f"),
-                "ราคา": st.column_config.NumberColumn("ราคา", min_value=0, format="%.0f"),
-                "ส่วนลด": st.column_config.NumberColumn("ส่วนลด", min_value=0, format="%.0f")
+                "จำนวน": st.column_config.NumberColumn("จำนวน", min_value=0.0, format="%.2f", step=0.01),
+                "ราคา": st.column_config.NumberColumn("ราคา", min_value=0.0, format="%.2f", step=0.01),
+                "ส่วนลด": st.column_config.NumberColumn("ส่วนลด", min_value=0.0, format="%.2f", step=0.01)
             },
             num_rows="dynamic",
             use_container_width=True,
@@ -339,7 +348,7 @@ with tab1:
                 if str(row['รายการ']) != info['รายการ']:
                     edited_df.at[idx, 'รายการ'] = info['รายการ']
                     edited_df.at[idx, 'หน่วย'] = info['หน่วย']
-                    edited_df.at[idx, 'ราคา'] = int(info['ราคา'])
+                    edited_df.at[idx, 'ราคา'] = float(info['ราคา'])
                     needs_rerun = True
         
         if needs_rerun:
@@ -348,16 +357,16 @@ with tab1:
         else:
             st.session_state.grid_df = edited_df
 
-    # Calculation Logic
+    # Calculation Logic (เปลี่ยนไปใช้ to_float เพื่อรองรับทศนิยม)
     calc_df = edited_df.copy()
-    calc_df['q'] = calc_df['จำนวน'].apply(to_int)
-    calc_df['p'] = calc_df['ราคา'].apply(to_int)
-    calc_df['d'] = calc_df['ส่วนลด'].apply(to_int)
-    calc_df['total'] = calc_df.apply(lambda x: int(round((x['q'] * x['p']) - x['d'])), axis=1)
+    calc_df['q'] = calc_df['จำนวน'].apply(to_float)
+    calc_df['p'] = calc_df['ราคา'].apply(to_float)
+    calc_df['d'] = calc_df['ส่วนลด'].apply(to_float)
+    calc_df['total'] = calc_df.apply(lambda x: round((x['q'] * x['p']) - x['d'], 2), axis=1)
     
-    sum_gross = int((calc_df['q'] * calc_df['p']).sum())
-    sum_disc = int(calc_df['d'].sum())
-    sum_sub = int(calc_df['total'].sum())
+    sum_gross = (calc_df['q'] * calc_df['p']).sum()
+    sum_disc = calc_df['d'].sum()
+    sum_sub = calc_df['total'].sum()
 
     # 4. Summary & Actions
     with st.expander("📊 สรุปยอดและบันทึกเอกสาร", expanded=True):
@@ -367,7 +376,6 @@ with tab1:
             st.markdown("##### 📝 หมายเหตุ & การอนุมัติ")
             st.text_area("หมายเหตุ (Remarks)", value="1. ราคายังไม่รวม VAT 7%\n2. กำหนดยืนราคา 30 วัน", key="remark_in", height=100, label_visibility="collapsed")
             
-            # --- แก้ไขส่วนลายเซ็นให้เหลือ 2 ช่อง ตามสั่ง ---
             st.markdown("<br>", unsafe_allow_html=True)
             s1, s2 = st.columns(2)
             with s1:
@@ -380,7 +388,7 @@ with tab1:
         with f_col2:
             # Grand Total Card
             has_vat = st.checkbox("คำนวณ VAT 7%", value=True)
-            vat_val = int(round(sum_sub * 0.07)) if has_vat else 0
+            vat_val = round(sum_sub * 0.07, 2) if has_vat else 0.0
             grand_total = sum_sub + vat_val
             
             baht_text_show = bahttext(grand_total)
@@ -390,14 +398,14 @@ with tab1:
             st.markdown(f"""
             <div class="metric-card">
                 <div class="metric-label">ยอดรวมทั้งสิ้น (Grand Total)</div>
-                <div class="metric-value">{grand_total:,.0f}</div>
+                <div class="metric-value">{grand_total:,.2f}</div>
                 <div style="font-size: 0.8rem; color: #166534; opacity: 0.8; margin-bottom:10px;">{baht_text_show}</div>
                 <div style="margin-top: 15px; font-size: 0.9rem; color: #555; text-align: right; border-top: 1px dashed #ccc; padding-top:10px;">
                     <table style="width: 100%;">
-                        <tr><td style="text-align: left; color:#666;">รวมสินค้า:</td><td style="text-align: right;">{sum_gross:,.0f}</td></tr>
-                        <tr><td style="text-align: left; color:#666;">ส่วนลด:</td><td style="text-align: right; color: #dc2626;">-{sum_disc:,.0f}</td></tr>
-                        <tr><td style="text-align: left; font-weight: 600;">ก่อนภาษี:</td><td style="text-align: right; font-weight: 600;">{sum_sub:,.0f}</td></tr>
-                        <tr style="{vat_style}"><td style="text-align: left; color:#666;">VAT 7%:</td><td style="text-align: right;">{vat_val:,.0f}</td></tr>
+                        <tr><td style="text-align: left; color:#666;">รวมสินค้า:</td><td style="text-align: right;">{sum_gross:,.2f}</td></tr>
+                        <tr><td style="text-align: left; color:#666;">ส่วนลด:</td><td style="text-align: right; color: #dc2626;">-{sum_disc:,.2f}</td></tr>
+                        <tr><td style="text-align: left; font-weight: 600;">ก่อนภาษี:</td><td style="text-align: right; font-weight: 600;">{sum_sub:,.2f}</td></tr>
+                        <tr style="{vat_style}"><td style="text-align: left; color:#666;">VAT 7%:</td><td style="text-align: right;">{vat_val:,.2f}</td></tr>
                     </table>
                 </div>
             </div>
@@ -676,18 +684,18 @@ with tab4:
                             items_df = pd.DataFrame.from_dict(data['grid_df'])
                             
                             # Recalculate totals
-                            items_df['q'] = items_df['จำนวน'].apply(to_int)
-                            items_df['p'] = items_df['ราคา'].apply(to_int)
-                            items_df['d'] = items_df['ส่วนลด'].apply(to_int)
-                            items_df['total'] = items_df.apply(lambda x: int(round((x['q'] * x['p']) - x['d'])), axis=1)
+                            items_df['q'] = items_df['จำนวน'].apply(to_float)
+                            items_df['p'] = items_df['ราคา'].apply(to_float)
+                            items_df['d'] = items_df['ส่วนลด'].apply(to_float)
+                            items_df['total'] = items_df.apply(lambda x: round((x['q'] * x['p']) - x['d'], 2), axis=1)
                             
-                            sum_gross = int((items_df['q'] * items_df['p']).sum())
-                            sum_disc = int(items_df['d'].sum())
-                            sum_sub = int(items_df['total'].sum())
+                            sum_gross = (items_df['q'] * items_df['p']).sum()
+                            sum_disc = items_df['d'].sum()
+                            sum_sub = items_df['total'].sum()
                             
                             # Re-check VAT condition
                             has_vat = "vat" in data and data["vat"] > 0
-                            vat_val = int(round(sum_sub * 0.07)) if has_vat else 0
+                            vat_val = round(sum_sub * 0.07, 2) if has_vat else 0.0
                             grand_total = sum_sub + vat_val
                             
                             doc_title_new = "ใบแจ้งหนี้ (INVOICE)" if action_type == "IV" else "ใบเสร็จรับเงิน (RECEIPT)"
