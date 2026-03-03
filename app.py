@@ -220,6 +220,11 @@ def clear_all_data():
     st.session_state.generated_pdf_bytes = None
     # Reset Doc No to new auto increment (Quotation by default)
     st.session_state.doc_no_in = generate_doc_no("QT") 
+    
+    # แก้ปัญหาข้อมูลเด้งหาย: ล้างแคชของตารางออก
+    if "editor_main" in st.session_state:
+        del st.session_state["editor_main"]
+        
     st.toast("ล้างข้อมูลหน้าจอเรียบร้อย", icon="🗑️")
 
 def update_customer_fields():
@@ -353,6 +358,9 @@ with tab1:
         
         if needs_rerun:
             st.session_state.grid_df = edited_df
+            # แก้ปัญหาข้อมูลเด้งหาย: ล้างแคชของตารางออกหลังดึงข้อมูลออโต้ฟิล
+            if "editor_main" in st.session_state:
+                del st.session_state["editor_main"]
             st.rerun()
         else:
             st.session_state.grid_df = edited_df
@@ -775,6 +783,10 @@ with tab4:
                         # นำตารางสินค้ากลับคืน
                         if 'grid_df' in data:
                             st.session_state.grid_df = pd.DataFrame.from_dict(data['grid_df'])
+                            
+                            # แก้ปัญหาข้อมูลเด้งหาย: ล้างแคชของตารางเพื่อรับข้อมูลประวัติ
+                            if "editor_main" in st.session_state:
+                                del st.session_state["editor_main"]
                             
                         st.success(f"โหลดข้อมูล {selected_edit} ไปยังหน้าสร้างใบเสนอราคาแล้ว! กดแท็บ 📝 เพื่อแก้ไขและเซฟทับได้เลย")
                     except Exception as e:
