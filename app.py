@@ -221,7 +221,7 @@ def clear_all_data():
     # Reset Doc No to new auto increment (Quotation by default)
     st.session_state.doc_no_in = generate_doc_no("QT") 
     
-    # แก้ปัญหาข้อมูลเด้งหาย: ล้างแคชของตารางออก
+    # ลบแคชของตารางออกเพื่อให้หน้าจอกลับมาว่าง 100% เวลาเคลียร์
     if "editor_main" in st.session_state:
         del st.session_state["editor_main"]
         
@@ -328,11 +328,11 @@ with tab1:
         
         prod_opts = st.session_state.db_products['รหัสสินค้า'].astype(str).unique().tolist()
         
-        # --- เปลี่ยนตารางให้รองรับจุดทศนิยม 2 ตำแหน่ง ---
+        # --- เปลี่ยนตารางให้ช่องรหัสสินค้าสามารถพิมพ์เองได้อิสระ ---
         edited_df = st.data_editor(
             st.session_state.grid_df,
             column_config={
-                "รหัสสินค้า": st.column_config.SelectboxColumn("รหัส", options=prod_opts, width="medium"),
+                "รหัสสินค้า": st.column_config.TextColumn("รหัส", width="medium"), # แก้ไขให้พิมพ์เองได้
                 "รายการ": st.column_config.TextColumn("รายการสินค้า", width="large"),
                 "จำนวน": st.column_config.NumberColumn("จำนวน", min_value=0.0, format="%.2f", step=0.01),
                 "ราคา": st.column_config.NumberColumn("ราคา", min_value=0.0, format="%.2f", step=0.01),
@@ -344,10 +344,10 @@ with tab1:
             key="editor_main"
         )
 
-        # Auto-fill Logic
+        # Auto-fill Logic: ถ้าพิมพ์รหัสตรงกับที่มี จะดึงข้อมูลมาให้
         needs_rerun = False
         for idx, row in edited_df.iterrows():
-            code = str(row['รหัสสินค้า'])
+            code = str(row['รหัสสินค้า']).strip()
             if code and code in prod_opts:
                 info = st.session_state.db_products[st.session_state.db_products['รหัสสินค้า'] == code].iloc[0]
                 if str(row['รายการ']) != info['รายการ']:
@@ -356,14 +356,12 @@ with tab1:
                     edited_df.at[idx, 'ราคา'] = float(info['ราคา'])
                     needs_rerun = True
         
+        # อัพเดตเฉพาะตอนดึงข้อมูลสินค้าระบบอัตโนมัติ เพื่อป้องกันตารางเด้งตอนผู้ใช้พิมพ์เอง
         if needs_rerun:
             st.session_state.grid_df = edited_df
-            # แก้ปัญหาข้อมูลเด้งหาย: ล้างแคชของตารางออกหลังดึงข้อมูลออโต้ฟิล
             if "editor_main" in st.session_state:
                 del st.session_state["editor_main"]
             st.rerun()
-        else:
-            st.session_state.grid_df = edited_df
 
     # Calculation Logic (เปลี่ยนไปใช้ to_float เพื่อรองรับทศนิยม)
     calc_df = edited_df.copy()
@@ -784,7 +782,7 @@ with tab4:
                         if 'grid_df' in data:
                             st.session_state.grid_df = pd.DataFrame.from_dict(data['grid_df'])
                             
-                            # แก้ปัญหาข้อมูลเด้งหาย: ล้างแคชของตารางเพื่อรับข้อมูลประวัติ
+                            # ลบแคชของตารางออกเพื่อให้ดึงข้อมูลเก่ามาทับได้สมบูรณ์
                             if "editor_main" in st.session_state:
                                 del st.session_state["editor_main"]
                             
