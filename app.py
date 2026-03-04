@@ -143,7 +143,8 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- Lottie Animation Loader ---
+# --- Lottie Animation Loader (ใส่แคชเพื่อแก้ปัญหาเว็บหนืด) ---
+@st.cache_data
 def load_lottieurl(url: str):
     try:
         r = requests.get(url)
