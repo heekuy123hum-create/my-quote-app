@@ -12,6 +12,8 @@ from email.mime.base import MIMEBase
 from email import encoders
 from bahttext import bahttext 
 import base64
+from PIL import Image
+import io
 
 # ==========================================
 # นำเข้าโมดูลจากไฟล์ที่แยกออกไป
@@ -26,6 +28,22 @@ def to_float(val):
         return float(val) if val is not None else 0.0
     except:
         return 0.0
+
+# --- ฟังก์ชันย่อขนาดรูปลายเซ็นเพื่อไม่ให้ทับช่องยอดเงินใน PDF ---
+def resize_signature(file_obj, max_w=140, max_h=50):
+    if file_obj is not None:
+        try:
+            img = Image.open(file_obj)
+            img.thumbnail((max_w, max_h))
+            buf = io.BytesIO()
+            fmt = img.format if img.format else 'PNG'
+            img.save(buf, format=fmt)
+            buf.seek(0)
+            buf.name = getattr(file_obj, 'name', 'signature.png')
+            return buf
+        except Exception:
+            return file_obj
+    return None
 
 # ==========================================
 # 1. SYSTEM CONFIG & ASSETS
@@ -387,9 +405,10 @@ with tab1:
         
         with f_col1:
             st.markdown("##### 📝 หมายเหตุ & การอนุมัติ")
-            st.text_area("หมายเหตุ (Remarks)", value="1. ราคายังไม่รวม VAT 7%\n2. กำหนดยืนราคา 30 วัน", key="remark_in", height=100, label_visibility="collapsed")
+            # แก้ไขคำว่า ระยะเวลาทำงาน 30 วัน ตามคำสั่ง
+            st.text_area("หมายเหตุ (Remarks)", value="1. ราคายังไม่รวม VAT 7%\n2. ระยะเวลาทำงาน 30 วัน", key="remark_in", height=100, label_visibility="collapsed")
             
-            st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True)
             s1, s2 = st.columns(2)
             with s1:
                 st.text_input("ผู้จัดทำ", key="s1_in")
@@ -486,13 +505,17 @@ with tab1:
                     "c_addr": st.session_state.c_addr_in, "c_tel": st.session_state.c_tel_in
                 }
                 
-                # ส่งค่า sigs แค่ 2 คน ส่วนคนที่ 3 ส่งเป็นว่างเปล่าไปเลยเพื่อไม่ให้เกิด Error ใน PDF Generator
+                # ย่อรูปลงอัตโนมัติก่อนส่งไปสร้าง PDF
+                img1_resized = resize_signature(st.session_state.get("img1_in", None))
+                img2_resized = resize_signature(st.session_state.get("img2_in", None))
+                
+                # ส่งค่า sigs แค่ 2 คน 
                 sigs = {
                     "s1": st.session_state.get("s1_in", ""), 
                     "s2": st.session_state.get("s2_in", ""), 
                     "s3": "",
-                    "img1": st.session_state.get("img1_in", None), 
-                    "img2": st.session_state.get("img2_in", None), 
+                    "img1": img1_resized, 
+                    "img2": img2_resized, 
                     "img3": None
                 }
                 
