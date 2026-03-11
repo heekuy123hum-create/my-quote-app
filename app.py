@@ -29,17 +29,47 @@ def to_float(val):
     except:
         return 0.0
 
-# --- ฟังก์ชันย่อขนาดรูปลายเซ็นเพื่อไม่ให้ทับช่องยอดเงินใน PDF ---
-def resize_signature(file_obj, max_w=100, max_h=25):
+# --- ฟังก์ชันจัดการขนาดรูปลายเซ็นโดยไม่ลดความคมชัด (พิกเซลไม่หาย) ---
+def resize_signature(file_obj):
     if file_obj is not None:
         try:
-            img = Image.open(file_obj)
-            img.thumbnail((max_w, max_h))
+            # เปิดรูปภาพและแปลงเป็นโหมด RGBA (เพื่อรองรับพื้นหลังโปร่งใส)
+            img = Image.open(file_obj).convert("RGBA")
+            
+            # ป้องกันรูปที่เซฟมาใหญ่เกินขีดจำกัดจนกินหน่วยความจำเครื่อง
+            # (1500px คือขนาดที่ใหญ่และชัดมากๆ แล้วสำหรับลายเซ็นบนเอกสาร รับรองว่าไม่แตก)
+            if img.width > 1500 or img.height > 1500:
+                img.thumbnail((1500, 1500), Image.Resampling.LANCZOS)
+                
+            orig_w, orig_h = img.size
+            
+            # ตัวคูณขยายกรอบเพื่อหลอกให้ระบบ PDF มองว่ารูปใหญ่ 
+            # (เลข 2.0 คือจะบีบให้ลายเซ็นที่ปรากฏจริงเล็กลงครึ่งนึง)
+            scale_factor = 2.0 
+            
+            new_w = int(orig_w * scale_factor)
+            new_h = int(orig_h * scale_factor)
+            
+            # บังคับรูปทรงของกรอบให้เป็นสี่เหลี่ยมผืนผ้าแนวนอนกว้างๆ เสมอ (กว้างอย่างน้อย 3.5 เท่าของความสูง)
+            # เพื่อป้องกันไม่ให้รูปดันล้นขึ้นไปทับบรรทัดด้านบน
+            if new_w < new_h * 3.5:
+                new_w = int(new_h * 3.5)
+                
+            # สร้างพื้นหลังโปร่งใส (Transparent Canvas) ขึ้นมาใหม่
+            new_img = Image.new("RGBA", (new_w, new_h), (255, 255, 255, 0))
+            
+            # วางลายเซ็นไว้ "ตรงกลางด้านล่าง" ของกรอบภาพใหม่
+            # ทำให้พื้นที่ส่วนบนเป็นช่องว่างโปร่งใส จึงรอดพ้นจากการไปทับข้อมูลด้านบน 100%
+            paste_x = (new_w - orig_w) // 2
+            paste_y = new_h - orig_h
+            
+            new_img.paste(img, (paste_x, paste_y))
+            
+            # บันทึกเป็น PNG เพื่อรักษาส่วนที่โปร่งใสไว้ แล้วส่งให้ PDF ต่อไป
             buf = io.BytesIO()
-            fmt = img.format if img.format else 'PNG'
-            img.save(buf, format=fmt)
+            new_img.save(buf, format='PNG')
             buf.seek(0)
-            buf.name = getattr(file_obj, 'name', 'signature.png')
+            buf.name = 'signature.png'
             return buf
         except Exception:
             return file_obj
@@ -322,7 +352,7 @@ with tab1:
         # Header Row for Customer
         cust_h1, cust_h2 = st.columns([0.6, 0.4])
         with cust_h1: 
-            pass # Removed Markdown Header to avoid duplication with Expander title
+            pass 
         with cust_h2: 
             # Dropdown เลือกลูกค้า
             cust_list = []
@@ -361,17 +391,16 @@ with tab1:
             key="editor_main"
         )
 
-        # Auto-fill Logic: ค้นหาแบบไม่สนพิมพ์เล็กพิมพ์ใหญ่ และปล่อยรหัสแปลกปลอมไว้
+        # Auto-fill Logic
         needs_rerun = False
         for idx, row in edited_df.iterrows():
             code_input = str(row['รหัสสินค้า']).strip()
             if code_input:
-                # แปลงรหัสในตาราง Tab 3 ให้เป็นตัวเล็กทั้งหมดแล้วเทียบกับรหัสที่กรอกเข้ามา (แปลงเป็นตัวเล็กเหมือนกัน)
                 matched_rows = st.session_state.db_products[st.session_state.db_products['รหัสสินค้า'].astype(str).str.lower() == code_input.lower()]
                 
                 if not matched_rows.empty:
                     info = matched_rows.iloc[0]
-                    exact_db_code = str(info['รหัสสินค้า']) # ใช้รูปแบบรหัสพิมพ์ใหญ่/เล็กที่ถูกต้องจากฐานข้อมูล
+                    exact_db_code = str(info['รหัสสินค้า']) 
                     
                     if str(row['รหัสสินค้า']) != exact_db_code or str(row['รายการ']) != info['รายการ']:
                         edited_df.at[idx, 'รหัสสินค้า'] = exact_db_code
@@ -379,16 +408,15 @@ with tab1:
                         edited_df.at[idx, 'หน่วย'] = info['หน่วย']
                         edited_df.at[idx, 'ราคา'] = float(info['ราคา'])
                         needs_rerun = True
-                # ถ้าไม่เจอในฐานข้อมูล (matched_rows.empty เป็น True) ก็ปล่อยผ่านไปเลย ไม่ลบทิ้ง
         
-        # อัพเดตเฉพาะตอนดึงข้อมูลสินค้าระบบอัตโนมัติ เพื่อป้องกันตารางเด้งตอนผู้ใช้พิมพ์เอง
+        # อัพเดตเฉพาะตอนดึงข้อมูลสินค้าระบบอัตโนมัติ 
         if needs_rerun:
             st.session_state.grid_df = edited_df
             if "editor_main" in st.session_state:
                 del st.session_state["editor_main"]
             st.rerun()
 
-    # Calculation Logic (เปลี่ยนไปใช้ to_float เพื่อรองรับทศนิยม)
+    # Calculation Logic 
     calc_df = edited_df.copy()
     calc_df['q'] = calc_df['จำนวน'].apply(to_float)
     calc_df['p'] = calc_df['ราคา'].apply(to_float)
@@ -405,7 +433,6 @@ with tab1:
         
         with f_col1:
             st.markdown("##### 📝 หมายเหตุ & การอนุมัติ")
-            # แก้ไขคำว่า ระยะเวลาทำงาน 30 วัน ตามคำสั่ง
             st.text_area("หมายเหตุ (Remarks)", value="1. ราคายังไม่รวม VAT 7%\n2. ระยะเวลาทำงาน 30 วัน", key="remark_in", height=100, label_visibility="collapsed")
             
             st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True)
