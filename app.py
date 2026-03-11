@@ -415,7 +415,10 @@ with tab1:
                 st.file_uploader("ลายเซ็น", type=["png", "jpg", "jpeg"], key="img1_in", label_visibility="collapsed")
             with s2:
                 st.text_input("ผู้อนุมัติ", key="s2_in")
-                st.file_uploader("ลายเซ็น", type=["png", "jpg", "jpeg"], key="img2_in", label_visibility="collapsed")
+                if os.path.exists("547.png"):
+                    st.image("547.png", width=120)
+                else:
+                    st.caption("⚠️ ไม่พบไฟล์ 547.png ในระบบ")
 
         with f_col2:
             # Grand Total Card
@@ -507,7 +510,8 @@ with tab1:
                 
                 # ย่อรูปลงอัตโนมัติก่อนส่งไปสร้าง PDF
                 img1_resized = resize_signature(st.session_state.get("img1_in", None))
-                img2_resized = resize_signature(st.session_state.get("img2_in", None))
+                img2_source = "547.png" if os.path.exists("547.png") else None
+                img2_resized = resize_signature(img2_source)
                 
                 # ส่งค่า sigs แค่ 2 คน 
                 sigs = {
