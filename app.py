@@ -29,15 +29,33 @@ def to_float(val):
     except:
         return 0.0
 
-# --- ฟังก์ชันย่อขนาดรูปลายเซ็นเพื่อไม่ให้ทับช่องยอดเงินใน PDF ---
-def resize_signature(file_obj, max_w=200, max_h=10):
+# --- ฟังก์ชันจัดการขนาดรูปลายเซ็นโดยไม่ลดพิกเซล (เพิ่มขอบใสแทนเพื่อให้ PDF บีบรูปลงเอง) ---
+def resize_signature(file_obj, extra_top=2.0, extra_width=0.5):
+    """
+    extra_top: เพิ่มพื้นที่โปร่งใสด้านบน (ยิ่งมาก ลายเซ็นยิ่งถูกบีบให้เล็กและอยู่ต่ำลง)
+    extra_width: เพิ่มพื้นที่โปร่งใสด้านข้าง (ยิ่งมาก ลายเซ็นยิ่งดูแคบลง)
+    """
     if file_obj is not None:
         try:
-            img = Image.open(file_obj)
-            img.thumbnail((max_w, max_h))
+            # เปิดรูปภาพและแปลงเป็นโหมดรองรับพื้นหลังโปร่งใส
+            img = Image.open(file_obj).convert("RGBA")
+            orig_w, orig_h = img.size
+            
+            # สร้างขนาดกรอบใหม่ (ไม่ลดพิกเซลรูปต้นฉบับเลย)
+            new_w = int(orig_w + (orig_w * extra_width))
+            new_h = int(orig_h + (orig_h * extra_top))
+            
+            # สร้างพื้นหลังโปร่งใส
+            new_img = Image.new("RGBA", (new_w, new_h), (255, 255, 255, 0))
+            
+            # วางรูปลงไปตรงกลางชิดขอบล่าง (เพื่อให้ลายเซ็นชิดเส้นประด้านล่างสุด)
+            paste_x = (new_w - orig_w) // 2
+            paste_y = new_h - orig_h
+            
+            new_img.paste(img, (paste_x, paste_y))
+            
             buf = io.BytesIO()
-            fmt = img.format if img.format else 'PNG'
-            img.save(buf, format=fmt)
+            new_img.save(buf, format='PNG')
             buf.seek(0)
             buf.name = getattr(file_obj, 'name', 'signature.png')
             return buf
@@ -860,4 +878,3 @@ with tab4:
             
     else:
         st.info("ยังไม่มีประวัติเอกสาร")
-
