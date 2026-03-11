@@ -30,7 +30,7 @@ def to_float(val):
         return 0.0
 
 # --- ฟังก์ชันย่อขนาดรูปลายเซ็นเพื่อไม่ให้ทับช่องยอดเงินใน PDF ---
-def resize_signature(file_obj, max_w=140, max_h=50):
+def resize_signature(file_obj, max_w=100, max_h=25):
     if file_obj is not None:
         try:
             img = Image.open(file_obj)
