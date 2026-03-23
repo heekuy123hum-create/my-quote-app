@@ -31,24 +31,16 @@ def to_float(val):
 
 # --- ฟังก์ชันจัดการขนาดรูปลายเซ็นโดยไม่ลดพิกเซล (เพิ่มขอบใสแทนเพื่อให้ PDF บีบรูปลงเอง) ---
 def resize_signature(file_obj, extra_top=2.0, extra_width=0.5):
-    """
-    extra_top: เพิ่มพื้นที่โปร่งใสด้านบน (ยิ่งมาก ลายเซ็นยิ่งถูกบีบให้เล็กและอยู่ต่ำลง)
-    extra_width: เพิ่มพื้นที่โปร่งใสด้านข้าง (ยิ่งมาก ลายเซ็นยิ่งดูแคบลง)
-    """
     if file_obj is not None:
         try:
-            # เปิดรูปภาพและแปลงเป็นโหมดรองรับพื้นหลังโปร่งใส
             img = Image.open(file_obj).convert("RGBA")
             orig_w, orig_h = img.size
             
-            # สร้างขนาดกรอบใหม่ (ไม่ลดพิกเซลรูปต้นฉบับเลย)
             new_w = int(orig_w + (orig_w * extra_width))
             new_h = int(orig_h + (orig_h * extra_top))
             
-            # สร้างพื้นหลังโปร่งใส
             new_img = Image.new("RGBA", (new_w, new_h), (255, 255, 255, 0))
             
-            # วางรูปลงไปตรงกลางชิดขอบล่าง (เพื่อให้ลายเซ็นชิดเส้นประด้านล่างสุด)
             paste_x = (new_w - orig_w) // 2
             paste_y = new_h - orig_h
             
@@ -78,7 +70,6 @@ st.markdown("""
         background-color: #f8f9fa;
     }
     
-    /* Header Styling */
     h1 {
         color: #1e3a8a;
         font-weight: 700;
@@ -89,7 +80,6 @@ st.markdown("""
         font-weight: 600;
     }
 
-    /* Custom Cards */
     .custom-card {
         background-color: white;
         padding: 20px;
@@ -99,7 +89,6 @@ st.markdown("""
         border: 1px solid #e2e8f0;
     }
     
-    /* Input Fields Styling */
     .stTextInput > div > div > input {
         border-radius: 8px;
         border: 1px solid #cbd5e1;
@@ -108,7 +97,6 @@ st.markdown("""
         border-radius: 8px;
     }
 
-    /* Button Styling */
     .stButton>button {
         border-radius: 8px;
         height: 3em;
@@ -120,7 +108,6 @@ st.markdown("""
         box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     }
 
-    /* Metric Card (ใบเสร็จ) */
     .metric-card {
         background: linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%);
         border: 1px solid #bbf7d0;
@@ -156,7 +143,6 @@ st.markdown("""
         text-shadow: 2px 2px 0px rgba(255,255,255,1);
     }
     
-    /* Tab Styling */
     .stTabs [data-baseweb="tab-list"] {
         gap: 10px;
     }
@@ -179,7 +165,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- Lottie Animation Loader (ใส่แคชเพื่อแก้ปัญหาเว็บหนืด) ---
 @st.cache_data
 def load_lottieurl(url: str):
     try:
@@ -193,7 +178,6 @@ def load_lottieurl(url: str):
 lottie_office = load_lottieurl("https://lottie.host/5a8b7928-8924-4069-950c-1123533866b1/0XgV0lK1uF.json")
 lottie_success = load_lottieurl("https://assets9.lottiefiles.com/packages/lf20_ttv8K8.json")
 
-# เริ่มต้นตัวแปร Session State (แก้ไขค่าเริ่มต้นให้เป็น 0.0 รองรับทศนิยม)
 if "grid_df" not in st.session_state:
     st.session_state.grid_df = pd.DataFrame(
         [{"รหัสสินค้า": "", "รายการ": "", "จำนวน": 0.0, "หน่วย": "", "ราคา": 0.0, "ส่วนลด": 0.0}] * 15
@@ -234,14 +218,12 @@ def send_email_with_attachment(sender_email, sender_password, receiver_email, su
     except Exception as e:
         return False, f"เกิดข้อผิดพลาด: {str(e)}"
 
-# เรียกใช้งานการโหลดฐานข้อมูล
 load_data()
 
 # ==========================================
 # 3. USER INTERFACE
 # ==========================================
 
-# --- ฟังก์ชันช่วยเหลือสำหรับแสดง PDF ---
 def display_pdf(pdf_bytes):
     base64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
     pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="600" type="application/pdf"></iframe>'
@@ -249,16 +231,13 @@ def display_pdf(pdf_bytes):
 
 def clear_all_data():
     st.session_state.grid_df = pd.DataFrame([{"รหัสสินค้า": "", "รายการ": "", "จำนวน": 0.0, "หน่วย": "", "ราคา": 0.0, "ส่วนลด": 0.0}] * 15)
-    # ลบตัวแปร s3_in และ img3_in ออกจากการเคลียร์
-    reset_keys = ["c_name_in", "contact_in", "c_addr_in", "c_tel_in", "remark_in", "s1_in", "s2_in", "img1_in", "img2_in"]
+    reset_keys = ["c_name_in", "contact_in", "c_addr_in", "c_tel_in", "remark_in", "s1_in", "s2_in", "img2_in"]
     for k in reset_keys:
         if k in st.session_state: st.session_state[k] = ""
     st.session_state["cust_selector_tab1"] = "-- พิมพ์เอง --"
     st.session_state.generated_pdf_bytes = None
-    # Reset Doc No to new auto increment (Quotation by default)
     st.session_state.doc_no_in = generate_doc_no("QT") 
     
-    # ลบแคชของตารางออกเพื่อให้หน้าจอกลับมาว่าง 100% เวลาเคลียร์
     if "editor_main" in st.session_state:
         del st.session_state["editor_main"]
         
@@ -273,7 +252,6 @@ def update_customer_fields():
         st.session_state.c_addr_in = str(row['ที่อยู่']) if pd.notna(row['ที่อยู่']) else ""
         st.session_state.c_tel_in = str(row['โทร']) if pd.notna(row['โทร']) else ""
 
-# --- SIDEBAR: Email Settings ---
 with st.sidebar:
     st.markdown("### ⚙️ Control Panel")
     with st.expander("📧 ตั้งค่าอีเมล (SMTP)", expanded=False):
@@ -284,7 +262,6 @@ with st.sidebar:
     st.divider()
     st.caption("© 2024 Siwakit Trading System v2.0")
 
-# --- MAIN HEADER with Layout ---
 st.markdown('<div style="padding-bottom: 20px;">', unsafe_allow_html=True)
 col_head1, col_head2 = st.columns([0.7, 0.3])
 with col_head1:
@@ -298,7 +275,6 @@ with col_head2:
         st_lottie(lottie_office, height=120, key="header_lottie")
 st.markdown('</div>', unsafe_allow_html=True)
 
-# Tabs Navigation
 tab1, tab2, tab3, tab4 = st.tabs([
     "📝 สร้างใบเสนอราคา (Quotation)", 
     "👥 ฐานข้อมูลลูกค้า (Customers)", 
@@ -310,23 +286,21 @@ tab1, tab2, tab3, tab4 = st.tabs([
 # TAB 1: Quotation
 # ------------------------------------------------------------------
 with tab1:
-    # 1. Header Info Section (Seller + Doc Info)
     with st.expander("🧾 ข้อมูลเอกสารและผู้ขาย (Document Info)", expanded=True):
         c1, c2 = st.columns([1.5, 1])
         with c1:
             col_s1, col_s2 = st.columns(2)
             with col_s1:
                 st.text_input("ชื่อบริษัทผู้ขาย", "บริษัท ศิวกิจ เทรดดิ้ง จำกัด", key="my_comp_in")
-                st.text_input("โทรศัพท์", key="my_tel_in")
+                st.text_input("โทรศัพท์", "0926710012 / 0924538936", key="my_tel_in")
             with col_s2:
-                st.text_input("ที่อยู่บริษัท", "123 ถนนตัวอย่าง กทม.", key="my_addr_in")
+                st.text_input("ที่อยู่บริษัท", "138/19 ม.5 ตำบลบ้านฉาง อำเภอบ้านฉาง จังหวัดระยอง 21130", key="my_addr_in")
                 st.text_input("เลขผู้เสียภาษี", key="my_tax_in")
                 
         with c2:
             st.markdown("""<div style="background-color:#eff6ff; padding:15px; border-radius:10px;">""", unsafe_allow_html=True)
             dc1, dc2 = st.columns(2)
             with dc1:
-                # ใช้ Function generate_doc_no("QT") เป็นค่า default
                 st.text_input("เลขที่ใบเสนอราคา", value=generate_doc_no("QT"), key="doc_no_in")
                 st.text_input("ยืนราคา (วัน)", "30", key="valid_days_in")
             with dc2:
@@ -335,23 +309,18 @@ with tab1:
             st.text_input("กำหนดส่งสินค้า", "ภายใน 7-15 วัน", key="due_date_in")
             st.markdown("</div>", unsafe_allow_html=True)
 
-    # 2. Customer Info Section
     with st.expander("👤 ข้อมูลลูกค้า (Customer Details)", expanded=True):
-        # Header Row for Customer
         cust_h1, cust_h2 = st.columns([0.6, 0.4])
         with cust_h1: 
-            pass # Removed Markdown Header to avoid duplication with Expander title
+            pass 
         with cust_h2: 
-            # Dropdown เลือกลูกค้า
             cust_list = []
             if not st.session_state.db_customers.empty:
                 cust_list = st.session_state.db_customers['ชื่อบริษัท'].dropna().unique().tolist()
             
             opts = ["-- พิมพ์เอง --"] + cust_list
-                
             st.selectbox("🔍 ค้นหาลูกค้าเก่า", opts, key="cust_selector_tab1", on_change=update_customer_fields, label_visibility="collapsed")
 
-        # Customer Fields
         cc1, cc2 = st.columns([1.5, 1])
         with cc1:
             st.text_input("ชื่อบริษัทลูกค้า", key="c_name_in", placeholder="ระบุชื่อบริษัท...")
@@ -360,10 +329,7 @@ with tab1:
             st.text_input("ผู้ติดต่อ", key="contact_in", placeholder="ชื่อผู้ติดต่อ...")
             st.text_input("เบอร์โทรศัพท์", key="c_tel_in")
 
-    # 3. Items Table
     with st.expander("📦 รายการสินค้า (Items)", expanded=True):
-        
-        # --- ใช้ TextColumn เพื่อให้พิมพ์ได้อิสระ ตามทางเลือก A ---
         edited_df = st.data_editor(
             st.session_state.grid_df,
             column_config={
@@ -379,17 +345,15 @@ with tab1:
             key="editor_main"
         )
 
-        # Auto-fill Logic: ค้นหาแบบไม่สนพิมพ์เล็กพิมพ์ใหญ่ และปล่อยรหัสแปลกปลอมไว้
         needs_rerun = False
         for idx, row in edited_df.iterrows():
             code_input = str(row['รหัสสินค้า']).strip()
             if code_input:
-                # แปลงรหัสในตาราง Tab 3 ให้เป็นตัวเล็กทั้งหมดแล้วเทียบกับรหัสที่กรอกเข้ามา (แปลงเป็นตัวเล็กเหมือนกัน)
                 matched_rows = st.session_state.db_products[st.session_state.db_products['รหัสสินค้า'].astype(str).str.lower() == code_input.lower()]
                 
                 if not matched_rows.empty:
                     info = matched_rows.iloc[0]
-                    exact_db_code = str(info['รหัสสินค้า']) # ใช้รูปแบบรหัสพิมพ์ใหญ่/เล็กที่ถูกต้องจากฐานข้อมูล
+                    exact_db_code = str(info['รหัสสินค้า'])
                     
                     if str(row['รหัสสินค้า']) != exact_db_code or str(row['รายการ']) != info['รายการ']:
                         edited_df.at[idx, 'รหัสสินค้า'] = exact_db_code
@@ -397,16 +361,13 @@ with tab1:
                         edited_df.at[idx, 'หน่วย'] = info['หน่วย']
                         edited_df.at[idx, 'ราคา'] = float(info['ราคา'])
                         needs_rerun = True
-                # ถ้าไม่เจอในฐานข้อมูล (matched_rows.empty เป็น True) ก็ปล่อยผ่านไปเลย ไม่ลบทิ้ง
         
-        # อัพเดตเฉพาะตอนดึงข้อมูลสินค้าระบบอัตโนมัติ เพื่อป้องกันตารางเด้งตอนผู้ใช้พิมพ์เอง
         if needs_rerun:
             st.session_state.grid_df = edited_df
             if "editor_main" in st.session_state:
                 del st.session_state["editor_main"]
             st.rerun()
 
-    # Calculation Logic (เปลี่ยนไปใช้ to_float เพื่อรองรับทศนิยม)
     calc_df = edited_df.copy()
     calc_df['q'] = calc_df['จำนวน'].apply(to_float)
     calc_df['p'] = calc_df['ราคา'].apply(to_float)
@@ -417,29 +378,28 @@ with tab1:
     sum_disc = calc_df['d'].sum()
     sum_sub = calc_df['total'].sum()
 
-    # 4. Summary & Actions
     with st.expander("📊 สรุปยอดและบันทึกเอกสาร", expanded=True):
         f_col1, f_col2 = st.columns([1.8, 1])
         
         with f_col1:
             st.markdown("##### 📝 หมายเหตุ & การอนุมัติ")
-            # แก้ไขคำว่า ระยะเวลาทำงาน 30 วัน ตามคำสั่ง
             st.text_area("หมายเหตุ (Remarks)", value="1. ราคายังไม่รวม VAT 7%\n2. ระยะเวลาทำงาน 30 วัน", key="remark_in", height=100, label_visibility="collapsed")
             
             st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True)
             s1, s2 = st.columns(2)
             with s1:
                 st.text_input("ผู้จัดทำ", key="s1_in")
-                st.file_uploader("ลายเซ็น", type=["png", "jpg", "jpeg"], key="img1_in", label_visibility="collapsed")
-            with s2:
-                st.text_input("ผู้อนุมัติ", key="s2_in")
+                # สำหรับผู้จัดทำดึงไฟล์รูป 547.png มาเลย
                 if os.path.exists("547.png"):
                     st.image("547.png", width=120)
                 else:
                     st.caption("⚠️ ไม่พบไฟล์ 547.png ในระบบ")
+            with s2:
+                st.text_input("ผู้อนุมัติ", key="s2_in")
+                # สำหรับผู้อนุมัติเว้นว่างไว้ให้อัปโหลดเพิ่มทีหลังได้
+                st.file_uploader("ลายเซ็น", type=["png", "jpg", "jpeg"], key="img2_in", label_visibility="collapsed")
 
         with f_col2:
-            # Grand Total Card
             has_vat = st.checkbox("คำนวณ VAT 7%", value=True)
             vat_val = round(sum_sub * 0.07, 2) if has_vat else 0.0
             grand_total = sum_sub + vat_val
@@ -466,13 +426,11 @@ with tab1:
 
         st.markdown("###")
         
-        # Action Buttons
         b1, b2 = st.columns([0.2, 0.8])
         with b1:
             st.button("🧹 ล้างหน้าจอ", on_click=clear_all_data, use_container_width=True)
         with b2:
             if st.button("🚀 บันทึกและพิมพ์ PDF", type="primary", use_container_width=True):
-                # 1. Save History
                 doc_no = st.session_state.doc_no_in
                 json_data = {
                     "grid_df": edited_df.to_dict(),
@@ -485,6 +443,9 @@ with tab1:
                     "c_tel": st.session_state.c_tel_in
                 }
                 
+                # ลบของเก่าทิ้งหากมีการดึงมาแก้ไขแล้วเซฟด้วยเลขเดิม (Overwriting History)
+                st.session_state.db_history = st.session_state.db_history[st.session_state.db_history['doc_no'] != doc_no]
+                
                 new_hist = pd.DataFrame([{
                     "ลบ": False,
                     "doc_no": doc_no,
@@ -496,7 +457,6 @@ with tab1:
                 st.session_state.db_history = pd.concat([st.session_state.db_history, new_hist], ignore_index=True)
                 st.session_state.db_history = save_data(st.session_state.db_history, HISTORY_FILE, "doc_no")
                 
-                # 2. Add New Customer (if not exist)
                 if st.session_state.c_name_in and st.session_state.c_name_in not in st.session_state.db_customers['ชื่อบริษัท'].values:
                     new_cust = pd.DataFrame([{
                         "ลบ": False,
@@ -509,7 +469,6 @@ with tab1:
                     st.session_state.db_customers = pd.concat([st.session_state.db_customers, new_cust], ignore_index=True)
                     st.session_state.db_customers = save_data(st.session_state.db_customers, CUST_FILE, "รหัส")
                 
-                # 3. Generate PDF
                 doc_date_str = datetime.strptime(str(st.session_state.doc_date_in), "%Y-%m-%d").strftime("%d/%m/%Y")
                 try:
                     vd = int(st.session_state.valid_days_in)
@@ -526,12 +485,13 @@ with tab1:
                     "c_addr": st.session_state.c_addr_in, "c_tel": st.session_state.c_tel_in
                 }
                 
-                # ย่อรูปลงอัตโนมัติก่อนส่งไปสร้าง PDF
-                img1_resized = resize_signature(st.session_state.get("img1_in", None))
-                img2_source = "547.png" if os.path.exists("547.png") else None
-                img2_resized = resize_signature(img2_source)
+                # ผู้จัดทำใช้ 547.png เสมอ
+                img1_source = "547.png" if os.path.exists("547.png") else None
+                img1_resized = resize_signature(img1_source)
                 
-                # ส่งค่า sigs แค่ 2 คน 
+                # ผู้อนุมัติใช้จากช่องอัปโหลดที่สลับมาแล้ว
+                img2_resized = resize_signature(st.session_state.get("img2_in", None))
+                
                 sigs = {
                     "s1": st.session_state.get("s1_in", ""), 
                     "s2": st.session_state.get("s2_in", ""), 
@@ -580,7 +540,6 @@ with tab1:
             else:
                 st.error(f"ไม่สามารถแปลงไฟล์ได้: {err}")
 
-        # Email Form
         with st.expander("📧 ส่งอีเมลหาลูกค้าทันที"):
             em_receiver = st.text_input("อีเมลลูกค้า", placeholder="client@example.com")
             em_subject = st.text_input("หัวข้อ", value=f"ใบเสนอราคา {st.session_state.doc_no_in}")
@@ -704,7 +663,6 @@ with tab4:
             st.subheader("🔄 แปลงเอกสาร (Convert)")
             st.write("เลือกใบเสนอราคา (QT) เพื่อแปลงเป็นใบแจ้งหนี้ (IV) หรือใบเสร็จ (RE)")
             
-            # Filter only Quotations
             qt_list = st.session_state.db_history[
                 st.session_state.db_history['doc_no'].astype(str).str.startswith("QT")
             ]['doc_no'].tolist()
@@ -715,7 +673,6 @@ with tab4:
                 selected_qt = st.selectbox("เลือกใบเสนอราคาที่ต้องการแปลง", qt_list)
                 convert_date = st.date_input("วันที่เอกสารใหม่", date.today())
                 
-                # Fetch Data
                 if selected_qt:
                     row_data = st.session_state.db_history[st.session_state.db_history['doc_no'] == selected_qt].iloc[0]
                     json_raw = row_data['data_json']
@@ -735,13 +692,9 @@ with tab4:
                                 action_type = "RE"
                                 
                         if action_type:
-                            # 1. Generate New Doc No
                             new_doc_no = generate_doc_no(action_type)
-                            
-                            # 2. Reconstruct DataFrame
                             items_df = pd.DataFrame.from_dict(data['grid_df'])
                             
-                            # Recalculate totals
                             items_df['q'] = items_df['จำนวน'].apply(to_float)
                             items_df['p'] = items_df['ราคา'].apply(to_float)
                             items_df['d'] = items_df['ส่วนลด'].apply(to_float)
@@ -751,7 +704,6 @@ with tab4:
                             sum_disc = items_df['d'].sum()
                             sum_sub = items_df['total'].sum()
                             
-                            # Re-check VAT condition
                             has_vat = "vat" in data and data["vat"] > 0
                             vat_val = round(sum_sub * 0.07, 2) if has_vat else 0.0
                             grand_total = sum_sub + vat_val
@@ -759,7 +711,6 @@ with tab4:
                             doc_title_new = "ใบแจ้งหนี้ (INVOICE)" if action_type == "IV" else "ใบเสร็จรับเงิน (RECEIPT)"
                             doc_date_str_new = convert_date.strftime("%d/%m/%Y")
                             
-                            # Prepare Data for PDF
                             pdf_data = {
                                 "my_comp": data.get("my_comp", ""), "my_addr": data.get("my_addr", ""),
                                 "my_tel": data.get("my_tel", ""), "my_tax": data.get("my_tax", ""),
@@ -770,9 +721,8 @@ with tab4:
                             }
                             
                             sigs = {"s1": "", "s2": "", "s3": "", "img1": None, "img2": None, "img3": None}
-                            remark = "" # ล้างหมายเหตุออกตอนเป็นใบเสร็จ/แจ้งหนี้
+                            remark = "" 
                             
-                            # 3. Create PDF
                             converted_pdf = create_pdf(
                                 pdf_data, items_df,
                                 {"gross": sum_gross, "discount": sum_disc, "subtotal": sum_sub, "vat": vat_val, "grand_total": grand_total},
@@ -782,7 +732,6 @@ with tab4:
                             st.session_state.convert_pdf_bytes = converted_pdf
                             st.session_state.convert_filename = new_doc_no
                             
-                            # 4. Save to History (Optional - you can auto-save here if preferred)
                             json_data_new = data.copy()
                             json_data_new['doc_date_str'] = str(convert_date)
                             
@@ -808,42 +757,40 @@ with tab4:
             st.subheader("✏️ ดึงข้อมูลไปแก้ไข (Load to Edit)")
             st.write("เลือกเอกสารเพื่อนำข้อมูลกลับไปแก้ไขที่หน้า 'สร้างใบเสนอราคา'")
             
+            # --- ฟังก์ชัน Callback สำหรับดึงข้อมูล ---
+            def load_doc_to_edit(selected_doc):
+                row_data = st.session_state.db_history[st.session_state.db_history['doc_no'] == selected_doc].iloc[0]
+                json_raw = row_data['data_json']
+                try:
+                    data = json.loads(json_raw)
+                    st.session_state.doc_no_in = selected_doc
+                    if 'my_comp' in data: st.session_state.my_comp_in = data['my_comp']
+                    if 'my_addr' in data: st.session_state.my_addr_in = data['my_addr']
+                    if 'my_tel' in data: st.session_state.my_tel_in = data['my_tel']
+                    if 'my_tax' in data: st.session_state.my_tax_in = data['my_tax']
+                    if 'c_name' in data: st.session_state.c_name_in = data['c_name']
+                    if 'contact' in data: st.session_state.contact_in = data['contact']
+                    if 'c_addr' in data: st.session_state.c_addr_in = data['c_addr']
+                    if 'c_tel' in data: st.session_state.c_tel_in = data['c_tel']
+                    
+                    if 'grid_df' in data:
+                        st.session_state.grid_df = pd.DataFrame.from_dict(data['grid_df'])
+                        if "editor_main" in st.session_state:
+                            del st.session_state["editor_main"]
+                except Exception as e:
+                    st.error(f"เกิดข้อผิดพลาดในการโหลดข้อมูล: {e}")
+
             all_docs_list = st.session_state.db_history['doc_no'].tolist()
             if not all_docs_list:
                 st.warning("ไม่มีเอกสารในระบบ")
             else:
                 selected_edit = st.selectbox("เลือกเอกสารที่ต้องการแก้ไข", all_docs_list, key="edit_doc_selector")
-                if st.button("ดึงข้อมูลไปแก้ไข 📝", use_container_width=True):
-                    row_data = st.session_state.db_history[st.session_state.db_history['doc_no'] == selected_edit].iloc[0]
-                    json_raw = row_data['data_json']
-                    try:
-                        data = json.loads(json_raw)
-                        
-                        # อัปเดต session_state ของหน้า Tab 1
-                        st.session_state.doc_no_in = selected_edit
-                        if 'my_comp' in data: st.session_state.my_comp_in = data['my_comp']
-                        if 'my_addr' in data: st.session_state.my_addr_in = data['my_addr']
-                        if 'my_tel' in data: st.session_state.my_tel_in = data['my_tel']
-                        if 'my_tax' in data: st.session_state.my_tax_in = data['my_tax']
-                        if 'c_name' in data: st.session_state.c_name_in = data['c_name']
-                        if 'contact' in data: st.session_state.contact_in = data['contact']
-                        if 'c_addr' in data: st.session_state.c_addr_in = data['c_addr']
-                        if 'c_tel' in data: st.session_state.c_tel_in = data['c_tel']
-                        
-                        # นำตารางสินค้ากลับคืน
-                        if 'grid_df' in data:
-                            st.session_state.grid_df = pd.DataFrame.from_dict(data['grid_df'])
-                            
-                            # ลบแคชของตารางออกเพื่อให้ดึงข้อมูลเก่ามาทับได้สมบูรณ์
-                            if "editor_main" in st.session_state:
-                                del st.session_state["editor_main"]
-                            
-                        st.success(f"โหลดข้อมูล {selected_edit} ไปยังหน้าสร้างใบเสนอราคาแล้ว! กดแท็บ 📝 เพื่อแก้ไขและเซฟทับได้เลย")
-                    except Exception as e:
-                        st.error(f"เกิดข้อผิดพลาดในการโหลดข้อมูล: {e}")
+                
+                # ใช้ on_click เพื่อรันการแทนที่ค่า ก่อนที่จะเรนเดอร์ UI ซ้ำ
+                if st.button("ดึงข้อมูลไปแก้ไข 📝", use_container_width=True, on_click=load_doc_to_edit, args=(selected_edit,)):
+                    st.success(f"โหลดข้อมูล {selected_edit} ไปยังหน้าสร้างใบเสนอราคาแล้ว! กดแท็บ 📝 เพื่อแก้ไขและเซฟทับได้เลย")
             st.markdown("</div>", unsafe_allow_html=True)
 
-            # แสดงปุ่มดาวน์โหลดสำหรับเอกสารที่แปลง (ถ้ามี)
             if st.session_state.get('convert_pdf_bytes'):
                 st.markdown("""<div class="custom-card">""", unsafe_allow_html=True)
                 st.markdown(f"##### 📥 ดาวน์โหลดเอกสารที่แปลง ({st.session_state.get('convert_filename')})")
