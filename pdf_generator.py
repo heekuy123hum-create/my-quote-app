@@ -1,21 +1,20 @@
 import os
 import io
 import tempfile
+import math
 from fpdf import FPDF
 from bahttext import bahttext 
 from database import to_int
 
-# นำเข้าไลบรารีสำหรับแปลงรูปภาพ (หากไม่ได้ติดตั้ง จะมีการแจ้งเตือนหน้าเว็บ)
 try:
-    import fitz  # pip install PyMuPDF
-    from PIL import Image # pip install Pillow
+    import fitz 
+    from PIL import Image 
     HAS_IMG_LIB = True
 except ImportError:
     HAS_IMG_LIB = False
 
 FONT_PATH = "THSarabunNew.ttf" 
 
-# --- ฟังก์ชันช่วยเหลือสำหรับแปลงค่าเป็นทศนิยมเพื่อการแสดงผลใน PDF ---
 def to_f(val):
     try:
         if isinstance(val, str): val = val.replace(',', '')
@@ -24,14 +23,13 @@ def to_f(val):
         return 0.0
 
 # ==========================================
-# PDF ENGINE (Updated: รองรับทศนิยม 2 ตำแหน่ง)
+# PDF ENGINE (Updated: รองรับตัดบรรทัดอัตโนมัติ)
 # ==========================================
 def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line, doc_title="ใบเสนอราคา (QUOTATION)"):
     pdf = FPDF(unit='mm', format='A4')
     pdf.set_margins(15, 15, 15)
     pdf.set_auto_page_break(auto=False)
     
-    # Prepare Font
     if os.path.exists(FONT_PATH):
         pdf.add_font('THSarabun', '', FONT_PATH, uni=True)
         pdf.add_font('THSarabun', 'B', FONT_PATH, uni=True)
@@ -39,23 +37,17 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line, doc_title
     else:
         use_f = 'Arial'
 
-    # --- Prepare Data for Pagination ---
     valid_items = items_df[items_df['รายการ'].str.strip() != ""].copy()
     
-    # Constants
     MAX_ROWS_PER_PAGE = 15
     total_items = len(valid_items)
     
-    # Calculate pages needed
-    import math
     num_pages = math.ceil(total_items / MAX_ROWS_PER_PAGE)
     if num_pages == 0: num_pages = 1
     
     for page in range(num_pages):
         pdf.add_page()
         
-        # --- HEADER ---
-        # แสดงโลโก้ด้านบนซ้าย
         if os.path.exists("logo11.jpg"):
             pdf.image("logo11.jpg", x=15, y=10, w=25)
                 
@@ -67,7 +59,6 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line, doc_title
         pdf.set_font(use_f, '', 14)
         pdf.multi_cell(100, 6, f"{d.get('my_addr', '')}\nโทร: {d.get('my_tel', '')}\nเลขผู้เสียภาษี: {d.get('my_tax', '')}", 0, 'L')
 
-        # Doc No Box
         pdf.set_xy(140, 10)
         pdf.set_font(use_f, 'B', 14)
         pdf.cell(55, 20, "", 1, 0)
@@ -79,12 +70,10 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line, doc_title
         pdf.set_font(use_f, '', 12)
         pdf.cell(50, 4, f"หน้า {page+1} / {num_pages}", 0, 1, 'R')
 
-        # Title
         pdf.set_y(45)
         pdf.set_font(use_f, 'B', 26)
         pdf.cell(0, 10, doc_title, 0, 1, 'C')
 
-        # Customer Info
         pdf.set_y(60)
         start_y = pdf.get_y()
         
@@ -110,7 +99,7 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line, doc_title
             f"ครบกำหนด: {d.get('exp_date', '')}", 
             0, 'L')
 
-        # --- TABLE (Updated for decimals) ---
+        # --- TABLE (Updated for text wrap) ---
         pdf.set_y(90)
         cols_w = [12, 73, 15, 15, 25, 15, 25] 
         headers = ["ลำดับ", "รายการสินค้า", "จำนวน", "หน่วย", "ราคา/หน่วย", "ส่วนลด", "จำนวนเงิน"]
@@ -137,7 +126,6 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line, doc_title
                 dis = to_f(row.get('ส่วนลด'))
                 total = round((q * p) - dis, 2)
                 
-                # เปลี่ยนฟอร์แมตจาก :.0f เป็น :.2f เพื่อแสดงทศนิยม 2 ตำแหน่ง
                 vals = [
                     str(current_item_idx + 1),
                     str(row.get('รายการ')),
@@ -147,28 +135,52 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line, doc_title
                     f"{dis:,.2f}" if dis > 0 else "-",
                     f"{total:,.2f}"
                 ]
+                
+                # --- ตรรกะการคำนวณและวาดช่องแบบตัดบรรทัดอัตโนมัติ ---
+                max_lines = 1
+                for j, txt in enumerate(vals):
+                    w = pdf.get_string_width(txt)
+                    if w > 0:
+                        lines = math.ceil(w / (cols_w[j] - 2))
+                        if lines > max_lines: max_lines = lines
+                
+                h = 7 * max_lines 
+                if h < 8: h = 8
+                
+                x = pdf.get_x()
+                y = pdf.get_y()
+                
+                for j, txt in enumerate(vals):
+                    align = 'C' if j != 1 else 'L'
+                    
+                    # วาดเส้นกรอบ
+                    pdf.rect(x, y, cols_w[j], h)
+                    
+                    # พิมพ์ข้อความ
+                    pdf.set_xy(x, y + (h - 7)/2 if max_lines == 1 else y) 
+                    pdf.multi_cell(cols_w[j], 7 if max_lines > 1 else h, txt, 0, align)
+                    
+                    x += cols_w[j]
+                
+                pdf.set_xy(15, y + h)
+
             else:
                 vals = ["", "", "", "", "", "", ""]
-            
-            for j, txt in enumerate(vals):
-                align = 'C'
-                if j == 1: align = 'L'
-                pdf.cell(cols_w[j], row_height, txt, 1, 0, align)
-            pdf.ln()
+                for j, txt in enumerate(vals):
+                    pdf.cell(cols_w[j], row_height, txt, 1, 0, 'C')
+                pdf.ln()
 
         # --- SUMMARY (Only on Last Page) ---
         if page == num_pages - 1:
             pdf.ln(2)
             current_y = pdf.get_y()
             
-            # ส่วนหมายเหตุ
             pdf.set_xy(15, current_y)
             pdf.set_font(use_f, 'B', 14)
             pdf.cell(0, 7, "หมายเหตุ / Remarks:", 0, 1)
             pdf.set_font(use_f, '', 13)
             pdf.multi_cell(90, 5, remark_text, 0, 'L')
             
-            # ส่วนตัวเลขสรุป
             sum_x_label = 130 
             sum_x_val = 170   
             sum_y = current_y
@@ -179,7 +191,6 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line, doc_title
                 pdf.set_font(use_f, 'B' if bold else '', 13)
                 pdf.cell(40, 6, label, 0, 0, 'R')
                 pdf.set_xy(sum_x_val, sum_y)
-                # ปรับให้แสดงทศนิยม 2 ตำแหน่งในยอดรวม
                 pdf.cell(25, 6, f"{value:,.2f}", 'B' if line else 0, 1, 'R')
                 sum_y += 6
 
@@ -193,7 +204,6 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line, doc_title
             grand_total_val = summary['grand_total']
             baht_text_str = bahttext(grand_total_val)
             
-            # จัดวางตัวหนังสือภาษาไทย
             pdf.set_xy(15, sum_y)
             pdf.set_font(use_f, 'B', 13)
             pdf.cell(115, 6, f"({baht_text_str})", 0, 0, 'C')
@@ -204,7 +214,7 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line, doc_title
             pdf.set_xy(170, sum_y)
             pdf.cell(25, 6, f"{grand_total_val:,.2f}", 0, 1, 'R')
 
-            # --- SIGNATURES (เหลือ 2 ช่อง ตามสั่ง) ---
+            # --- SIGNATURES ---
             pdf.set_y(-42) 
             pdf.set_font(use_f, '', 13)
             
@@ -239,7 +249,6 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line, doc_title
 
     return bytes(pdf.output())
 
-# --- ฟังก์ชันช่วยเหลือสำหรับแปลง PDF เป็นรูปภาพ ---
 def convert_pdf_to_image(pdf_bytes, format_type):
     if not HAS_IMG_LIB:
         return None, "กรุณาติดตั้งไลบรารีเพิ่มเติม: pip install PyMuPDF Pillow"
