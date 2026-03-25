@@ -22,9 +22,8 @@ def to_f(val):
     except:
         return 0.0
 
-
 # ==========================================
-# PDF ENGINE (FINAL: แก้ชน + จำกัด 15 แถวจริง)
+# PDF ENGINE (FIX: กันชนลายเซ็น + summary ไม่ชน)
 # ==========================================
 def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line, doc_title="ใบเสนอราคา (QUOTATION)"):
     pdf = FPDF(unit='mm', format='A4')
@@ -39,40 +38,37 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line, doc_title
         use_f = 'Arial'
 
     valid_items = items_df[items_df['รายการ'].str.strip() != ""].copy()
-
-    BASE_ROW_HEIGHT = 8
-    MAX_LINES_PER_PAGE = 15   # ← ของจริงที่มึงต้องการ
-
-    # ===== helper วาด header =====
-    def draw_header(page, total_pages):
+    
+    MAX_ROWS_PER_PAGE = 15
+    total_items = len(valid_items)
+    
+    num_pages = math.ceil(total_items / MAX_ROWS_PER_PAGE)
+    if num_pages == 0: num_pages = 1
+    
+    for page in range(num_pages):
         pdf.add_page()
-
+        
         if os.path.exists("logo11.jpg"):
             pdf.image("logo11.jpg", x=15, y=10, w=25)
-
+                
         pdf.set_xy(45, 10)
         pdf.set_font(use_f, 'B', 18)
         pdf.cell(0, 8, f"{d.get('my_comp', '')}", 0, 1, 'L')
         
         pdf.set_x(45)
         pdf.set_font(use_f, '', 14)
-        pdf.multi_cell(100, 6,
-            f"{d.get('my_addr', '')}\nโทร: {d.get('my_tel', '')}\nเลขผู้เสียภาษี: {d.get('my_tax', '')}",
-            0, 'L'
-        )
+        pdf.multi_cell(100, 6, f"{d.get('my_addr', '')}\nโทร: {d.get('my_tel', '')}\nเลขผู้เสียภาษี: {d.get('my_tax', '')}", 0, 'L')
 
         pdf.set_xy(140, 10)
         pdf.set_font(use_f, 'B', 14)
         pdf.cell(55, 20, "", 1, 0)
-
         pdf.set_xy(142, 13)
-        pdf.cell(50, 6, f"เลขที่: {d.get('doc_no', '')}", 0, 1)
+        pdf.cell(50, 6, f"เลขที่: {d.get('doc_no', '')}", 0, 1, 'L')
         pdf.set_x(142)
-        pdf.cell(50, 6, f"วันที่: {d.get('doc_date', '')}", 0, 1)
-
+        pdf.cell(50, 6, f"วันที่: {d.get('doc_date', '')}", 0, 1, 'L')
         pdf.set_xy(142, 25)
         pdf.set_font(use_f, '', 12)
-        pdf.cell(50, 4, f"หน้า {page} / {total_pages}", 0, 1, 'R')
+        pdf.cell(50, 4, f"หน้า {page+1} / {num_pages}", 0, 1, 'R')
 
         pdf.set_y(45)
         pdf.set_font(use_f, 'B', 26)
@@ -80,197 +76,205 @@ def create_pdf(d, items_df, summary, sigs, remark_text, show_vat_line, doc_title
 
         pdf.set_y(60)
         start_y = pdf.get_y()
-
+        
+        pdf.set_font(use_f, '', 14)
         pdf.set_font(use_f, 'B', 14)
         pdf.cell(15, 7, "ลูกค้า: ", 0, 0)
         pdf.set_font(use_f, '', 14)
         pdf.cell(0, 7, f"{d.get('c_name', '')}", 0, 1)
-
+        
         pdf.set_x(15)
         pdf.set_font(use_f, 'B', 14)
         pdf.cell(20, 7, "ผู้ติดต่อ: ", 0, 0)
         pdf.set_font(use_f, '', 14)
         pdf.cell(0, 7, f"{d.get('contact', '')}", 0, 1)
-
+        
         pdf.set_x(15)
-        pdf.multi_cell(110, 6,
-            f"ที่อยู่: {d.get('c_addr', '')}\nโทร: {d.get('c_tel', '')}",
-            0, 'L'
-        )
-
+        pdf.multi_cell(110, 6, f"ที่อยู่: {d.get('c_addr', '')}\nโทร: {d.get('c_tel', '')}", 0, 'L')
+        
         pdf.set_xy(135, start_y)
-        pdf.multi_cell(65, 7,
+        pdf.multi_cell(65, 7, 
             f"กำหนดส่ง: {d.get('due_date', '')}\n"
             f"ยืนราคา: {d.get('valid_days', '')} วัน\n"
-            f"ครบกำหนด: {d.get('exp_date', '')}",
-            0, 'L'
-        )
+            f"ครบกำหนด: {d.get('exp_date', '')}", 
+            0, 'L')
 
-        # table header
+        # --- TABLE ---
         pdf.set_y(90)
-        cols_w = [12, 73, 15, 15, 25, 15, 25]
-        headers = ["ลำดับ","รายการสินค้า","จำนวน","หน่วย","ราคา/หน่วย","ส่วนลด","จำนวนเงิน"]
+        cols_w = [12, 73, 15, 15, 25, 15, 25] 
+        headers = ["ลำดับ", "รายการสินค้า", "จำนวน", "หน่วย", "ราคา/หน่วย", "ส่วนลด", "จำนวนเงิน"]
+        
+        def draw_table_header():
+            pdf.set_fill_color(240, 240, 240)
+            pdf.set_font(use_f, 'B', 13)
+            for i, h in enumerate(headers):
+                pdf.cell(cols_w[i], 9, h, 1, 0, 'C', True)
+            pdf.ln()
+            pdf.set_font(use_f, '', 13)
 
-        pdf.set_fill_color(240,240,240)
-        pdf.set_font(use_f,'B',13)
-        for i,h in enumerate(headers):
-            pdf.cell(cols_w[i],9,h,1,0,'C',True)
-        pdf.ln()
+        draw_table_header()
 
-        pdf.set_font(use_f,'',13)
+        row_height = 8 
+        
+        start_idx = page * MAX_ROWS_PER_PAGE
+        end_idx = start_idx + MAX_ROWS_PER_PAGE
+        page_items = valid_items.iloc[start_idx:end_idx]
+        
+        for i in range(MAX_ROWS_PER_PAGE):
+            current_item_idx = start_idx + i
 
-        return cols_w
+            if i < len(page_items):
+                row = page_items.iloc[i]
+                q = to_f(row.get('จำนวน'))
+                p = to_f(row.get('ราคา'))
+                dis = to_f(row.get('ส่วนลด'))
+                total = round((q * p) - dis, 2)
+                
+                vals = [
+                    str(current_item_idx + 1),
+                    str(row.get('รายการ')),
+                    f"{q:,.2f}",
+                    str(row.get('หน่วย')),
+                    f"{p:,.2f}",
+                    f"{dis:,.2f}" if dis > 0 else "-",
+                    f"{total:,.2f}"
+                ]
+                
+                max_lines = 1
+                for j, txt in enumerate(vals):
+                    w = pdf.get_string_width(txt)
+                    if w > 0:
+                        lines = math.ceil(w / (cols_w[j] - 2))
+                        if lines > max_lines: max_lines = lines
+                
+                h = 7 * max_lines 
+                if h < 8: h = 8
+                
+                x = pdf.get_x()
+                y = pdf.get_y()
 
-    # ===== เตรียม items =====
-    items = []
-    for idx, row in valid_items.iterrows():
-        q = to_f(row.get('จำนวน'))
-        p = to_f(row.get('ราคา'))
-        dis = to_f(row.get('ส่วนลด'))
-        total = round((q*p)-dis,2)
+                # ⭐ กันชนลายเซ็น
+                if y + h > 250:
+                    pdf.add_page()
+                    pdf.set_y(90)
+                    draw_table_header()
+                    x = pdf.get_x()
+                    y = pdf.get_y()
 
-        items.append([
-            str(idx+1),
-            str(row.get('รายการ')),
-            f"{q:,.2f}",
-            str(row.get('หน่วย')),
-            f"{p:,.2f}",
-            f"{dis:,.2f}" if dis>0 else "-",
-            f"{total:,.2f}"
-        ])
+                for j, txt in enumerate(vals):
+                    align = 'C' if j != 1 else 'L'
+                    
+                    pdf.rect(x, y, cols_w[j], h)
+                    pdf.set_xy(x, y + (h - 7)/2 if max_lines == 1 else y) 
+                    pdf.multi_cell(cols_w[j], 7 if max_lines > 1 else h, txt, 0, align)
+                    
+                    x += cols_w[j]
+                
+                pdf.set_xy(15, y + h)
 
-    # ===== ประเมินจำนวนหน้าแบบใหม่ (ตามความสูงจริง) =====
-    temp_pdf = FPDF()
-    temp_pdf.add_page()
-    temp_pdf.set_font('Arial','',13)
+            else:
+                vals = ["", "", "", "", "", "", ""]
+                for j, txt in enumerate(vals):
+                    pdf.cell(cols_w[j], row_height, txt, 1, 0, 'C')
+                pdf.ln()
 
-    cols_w_tmp = [12,73,15,15,25,15,25]
+        # =========================
+        # ⭐ FIX ใหญ่: SUMMARY ไม่ชนลายเซ็น
+        # =========================
+        if page == num_pages - 1:
 
-    total_pages = 1
-    current_lines = 0
+            # ประเมินความสูงคร่าวๆ
+            estimated_height = 60
 
-    for vals in items:
-        max_lines = 1
-        for j, txt in enumerate(vals):
-            w = temp_pdf.get_string_width(txt)
-            if w>0:
-                lines = math.ceil(w/(cols_w_tmp[j]-2))
-                if lines>max_lines: max_lines = lines
+            if pdf.get_y() + estimated_height > 250:
+                pdf.add_page()
 
-        if current_lines + max_lines > MAX_LINES_PER_PAGE:
-            total_pages += 1
-            current_lines = 0
+            pdf.ln(2)
+            current_y = pdf.get_y()
+            
+            pdf.set_xy(15, current_y)
+            pdf.set_font(use_f, 'B', 14)
+            pdf.cell(0, 7, "หมายเหตุ / Remarks:", 0, 1)
+            pdf.set_font(use_f, '', 13)
+            pdf.multi_cell(90, 5, remark_text, 0, 'L')
+            
+            sum_x_label = 130 
+            sum_x_val = 170   
+            sum_y = current_y
+            
+            def print_sum_row(label, value, bold=False, line=False):
+                nonlocal sum_y
+                pdf.set_xy(sum_x_label, sum_y)
+                pdf.set_font(use_f, 'B' if bold else '', 13)
+                pdf.cell(40, 6, label, 0, 0, 'R')
+                pdf.set_xy(sum_x_val, sum_y)
+                pdf.cell(25, 6, f"{value:,.2f}", 'B' if line else 0, 1, 'R')
+                sum_y += 6
 
-        current_lines += max_lines
+            print_sum_row("รวมเงินสินค้า:", summary['gross'])
+            print_sum_row("หักส่วนลด:", summary['discount'])
+            print_sum_row("ยอดหลังหักส่วนลด:", summary['subtotal'])
+            
+            if show_vat_line:
+                print_sum_row("ภาษีมูลค่าเพิ่ม 7%:", summary['vat'])
+            
+            grand_total_val = summary['grand_total']
+            baht_text_str = bahttext(grand_total_val)
+            
+            pdf.set_xy(15, sum_y)
+            pdf.set_font(use_f, 'B', 13)
+            pdf.cell(115, 6, f"({baht_text_str})", 0, 0, 'C')
+            
+            pdf.set_xy(130, sum_y)
+            pdf.cell(40, 6, "ยอดรวมสุทธิ:", 0, 0, 'R')
+            
+            pdf.set_xy(170, sum_y)
+            pdf.cell(25, 6, f"{grand_total_val:,.2f}", 0, 1, 'R')
 
-    # ===== วาดจริง =====
-    page = 1
-    cols_w = draw_header(page, total_pages)
+            # --- SIGNATURE (FIX + รองรับ 547.png) ---
+            pdf.set_y(-42) 
+            pdf.set_font(use_f, '', 13)
+            
+            sig_labels = ["ผู้จัดทำ", "ผู้อนุมัติ"]
+            names = [sigs.get('s1', ''), sigs.get('s2', '')]
+            images = [sigs.get('img1'), sigs.get('img2')]
 
-    current_lines = 0
+            # ⭐ ใส่ 547.png ถ้ามี
+            if os.path.exists("547.png"):
+                images[1] = "547.png"
+            
+            x_positions = [40, 130]
+            y_sig = pdf.get_y()
+            
+            for i in range(2):
+                if images[i]:
+                    try:
+                        if isinstance(images[i], str):
+                            pdf.image(images[i], x=x_positions[i] + 5, y=y_sig - 12, w=30, h=12)
+                        elif hasattr(images[i], 'read'):
+                            with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
+                                tmp.write(images[i].getvalue())
+                                tmp_path = tmp.name
+                            pdf.image(tmp_path, x=x_positions[i] + 5, y=y_sig - 12, w=30, h=12)
+                            os.remove(tmp_path)
+                    except:
+                        pass
 
-    for vals in items:
-
-        # คำนวณความสูง
-        max_lines = 1
-        for j, txt in enumerate(vals):
-            w = pdf.get_string_width(txt)
-            if w>0:
-                lines = math.ceil(w/(cols_w[j]-2))
-                if lines>max_lines: max_lines = lines
-
-        h = max(BASE_ROW_HEIGHT, 7*max_lines)
-
-        # ===== ถ้าเกิน 15 แถว → ขึ้นหน้าใหม่ =====
-        if current_lines + max_lines > MAX_LINES_PER_PAGE:
-            page += 1
-            cols_w = draw_header(page, total_pages)
-            current_lines = 0
-
-        x = pdf.get_x()
-        y = pdf.get_y()
-
-        for j, txt in enumerate(vals):
-            align = 'C' if j!=1 else 'L'
-
-            pdf.rect(x,y,cols_w[j],h)
-            pdf.set_xy(x, y + (h-7)/2 if max_lines==1 else y)
-            pdf.multi_cell(cols_w[j], 7 if max_lines>1 else h, txt, 0, align)
-
-            x += cols_w[j]
-
-        pdf.set_xy(15, y+h)
-
-        current_lines += max_lines
-
-    # ===== SUMMARY (อยู่หน้าสุดท้ายเท่านั้น) =====
-    pdf.ln(2)
-    current_y = pdf.get_y()
-
-    pdf.set_xy(15, current_y)
-    pdf.set_font(use_f,'B',14)
-    pdf.cell(0,7,"หมายเหตุ / Remarks:",0,1)
-
-    pdf.set_font(use_f,'',13)
-    pdf.multi_cell(90,5,remark_text,0,'L')
-
-    sum_x_label = 130
-    sum_x_val = 170
-    sum_y = current_y
-
-    def print_sum_row(label,value):
-        nonlocal sum_y
-        pdf.set_xy(sum_x_label,sum_y)
-        pdf.cell(40,6,label,0,0,'R')
-        pdf.set_xy(sum_x_val,sum_y)
-        pdf.cell(25,6,f"{value:,.2f}",0,1,'R')
-        sum_y += 6
-
-    print_sum_row("รวมเงินสินค้า:", summary['gross'])
-    print_sum_row("หักส่วนลด:", summary['discount'])
-    print_sum_row("ยอดหลังหักส่วนลด:", summary['subtotal'])
-
-    if show_vat_line:
-        print_sum_row("ภาษีมูลค่าเพิ่ม 7%:", summary['vat'])
-
-    grand_total_val = summary['grand_total']
-    baht_text_str = bahttext(grand_total_val)
-
-    pdf.set_xy(15,sum_y)
-    pdf.cell(115,6,f"({baht_text_str})",0,0,'C')
-
-    pdf.set_xy(130,sum_y)
-    pdf.cell(40,6,"ยอดรวมสุทธิ:",0,0,'R')
-
-    pdf.set_xy(170,sum_y)
-    pdf.cell(25,6,f"{grand_total_val:,.2f}",0,1,'R')
-
-    # ===== SIGNATURE =====
-    pdf.set_y(-42)
-    pdf.set_font(use_f,'',13)
-
-    sig_labels = ["ผู้จัดทำ","ผู้อนุมัติ"]
-    names = [sigs.get('s1',''), sigs.get('s2','')]
-
-    x_positions = [40,130]
-    y_sig = pdf.get_y()
-
-    for i in range(2):
-        pdf.set_xy(x_positions[i], y_sig)
-        pdf.cell(40,6,"........................................",0,1,'C')
-        pdf.set_xy(x_positions[i], y_sig+6)
-        pdf.cell(40,6,sig_labels[i],0,1,'C')
-        pdf.set_xy(x_positions[i], y_sig+12)
-        disp = f"({names[i]})" if names[i] else "(........................................)"
-        pdf.cell(40,6,disp,0,1,'C')
-        pdf.set_xy(x_positions[i], y_sig+18)
-        pdf.cell(40,6,"วันที่ ...../...../..........",0,1,'C')
+                pdf.set_xy(x_positions[i], y_sig)
+                pdf.cell(40, 6, "........................................", 0, 1, 'C')
+                pdf.set_xy(x_positions[i], y_sig + 6)
+                pdf.cell(40, 6, sig_labels[i], 0, 1, 'C')
+                pdf.set_xy(x_positions[i], y_sig + 12)
+                disp = f"({names[i]})" if names[i] else "(........................................)"
+                pdf.cell(40, 6, disp, 0, 1, 'C')
+                pdf.set_xy(x_positions[i], y_sig + 18)
+                pdf.cell(40, 6, "วันที่ ...../...../..........", 0, 1, 'C')
 
     return bytes(pdf.output())
 
 
 # ==========================================
-# convert_pdf_to_image (ครบ ไม่หาย)
+# convert (เหมือนเดิม ไม่แตะ)
 # ==========================================
 def convert_pdf_to_image(pdf_bytes, format_type):
     if not HAS_IMG_LIB:
@@ -286,17 +290,15 @@ def convert_pdf_to_image(pdf_bytes, format_type):
         if not images: return None, "ไม่สามารถอ่านหน้า PDF ได้"
             
         widths, heights = zip(*(i.size for i in images))
-        new_im = Image.new('RGB', (max(widths), sum(heights)), (255,255,255))
-        
+        new_im = Image.new('RGB', (max(widths), sum(heights)), (255, 255, 255))
         y_offset = 0
         for im in images:
-            new_im.paste(im,(0,y_offset))
+            new_im.paste(im, (0, y_offset))
             y_offset += im.size[1]
             
         img_byte_arr = io.BytesIO()
-        pil_format = "JPEG" if format_type.upper()=="JPG" else "PNG"
+        pil_format = "JPEG" if format_type.upper() == "JPG" else "PNG"
         new_im.save(img_byte_arr, format=pil_format)
-        
         return img_byte_arr.getvalue(), None
     except Exception as e:
         return None, str(e)
