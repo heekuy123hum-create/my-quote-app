@@ -99,19 +99,11 @@ def save_data(df_to_save, table_name, key_col=None):
     df = df.fillna("")
     records = df.to_dict(orient='records')
     
-    clean_records = []
+    existing_records = []
+    new_records = []
+    
     for r in records:
-        # ✅ FIX: จัดการค่า id ป้องกัน Error 1.0 (invalid input syntax for type integer)
-        if 'id' in r:
-            if pd.isna(r['id']) or r['id'] == "":
-                del r['id']
-            else:
-                try:
-                    # บังคับแปลง 1.0 ให้กลายเป็น 1 ทันที
-                    r['id'] = int(float(r['id']))
-                except:
-                    del r['id']
-            
+        # คืนค่า JSON สำหรับตารางประวัติเอกสาร
         if table_name == HISTORY_FILE and 'data_json' in r:
             if isinstance(r['data_json'], str):
                 try:
@@ -119,24 +111,45 @@ def save_data(df_to_save, table_name, key_col=None):
                 except:
                     pass
                     
-        clean_records.append(r)
+        # ตรวจสอบว่ามี id หรือไม่ เพื่อแยกกลุ่มข้อมูลเก่า/ใหม่
+        has_valid_id = False
+        if 'id' in r:
+            if pd.isna(r['id']) or r['id'] == "":
+                del r['id']
+            else:
+                try:
+                    r['id'] = int(float(r['id']))
+                    has_valid_id = True
+                except:
+                    del r['id']
+        
+        if has_valid_id:
+            existing_records.append(r)
+        else:
+            new_records.append(r)
 
-    if len(clean_records) > 0:
-        try:
-            supabase.table(table_name).upsert(clean_records).execute()
+    try:
+        # 1. อัปเดตข้อมูลที่มีอยู่แล้ว (Upsert)
+        if len(existing_records) > 0:
+            supabase.table(table_name).upsert(existing_records).execute()
             
-            response = supabase.table(table_name).select("*").order("id").execute()
-            latest_df = pd.DataFrame(response.data)
+        # 2. เพิ่มข้อมูลใหม่ (Insert) โดยไม่ส่งคีย์ id ไปด้วย
+        if len(new_records) > 0:
+            supabase.table(table_name).insert(new_records).execute()
             
-            if table_name == HISTORY_FILE and 'data_json' in latest_df.columns:
-                 latest_df['data_json'] = latest_df['data_json'].apply(lambda x: json.dumps(x) if isinstance(x, dict) else x)
-                 
-            latest_df = latest_df.fillna("")
-            return latest_df
-        except Exception as e:
-            st.error(f"เกิดข้อผิดพลาดในการบันทึกข้อมูลตาราง {table_name}: {e}")
-            return df
-    return df
+        # ดึงข้อมูลล่าสุดกลับมาจัดเรียงใหม่
+        response = supabase.table(table_name).select("*").order("id").execute()
+        latest_df = pd.DataFrame(response.data)
+        
+        if table_name == HISTORY_FILE and 'data_json' in latest_df.columns:
+             latest_df['data_json'] = latest_df['data_json'].apply(lambda x: json.dumps(x) if isinstance(x, dict) else x)
+             
+        latest_df = latest_df.fillna("")
+        return latest_df
+        
+    except Exception as e:
+        st.error(f"เกิดข้อผิดพลาดในการบันทึกข้อมูลตาราง {table_name}: {e}")
+        return df
 
 # ==========================================
 # 4. ฟังก์ชันช่วยเหลืออื่นๆ
