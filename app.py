@@ -585,8 +585,9 @@ with tab2:
 
     if st.button("💾 บันทึกข้อมูลลูกค้า", type="primary"):
         to_save = edited_cust[edited_cust['ลบ'] == False].copy()
-        to_save = save_data(to_save, CUST_FILE, key_col="ชื่อบริษัท")
-        st.session_state.db_customers = to_save
+        # ✅ FIX: นำค่าจากตารางที่ผู้ใช้แก้ (to_save) ไปเขียนทับ session_state ก่อนเซฟ
+        st.session_state.db_customers = to_save 
+        save_data(st.session_state.db_customers, CUST_FILE, key_col="ชื่อบริษัท")
         st.success("บันทึกเรียบร้อย!")
         st.rerun()
 
@@ -619,8 +620,9 @@ with tab3:
 
     if st.button("💾 บันทึกข้อมูลสินค้า", type="primary"):
         to_save_p = edited_prod[edited_prod['ลบ'] == False].copy()
-        to_save_p = save_data(to_save_p, PROD_FILE, key_col="รหัสสินค้า")
+        # ✅ FIX: นำค่าจากตารางไปเขียนทับ session_state 
         st.session_state.db_products = to_save_p
+        save_data(st.session_state.db_products, PROD_FILE, key_col="รหัสสินค้า")
         st.success("บันทึกเรียบร้อย!")
         st.rerun()
 
@@ -652,8 +654,9 @@ with tab4:
             if st.button("🗑️ บันทึกการลบเอกสาร", type="primary", use_container_width=True):
                 st.session_state.db_history['ลบ'] = edited_hist['ลบ'].values
                 to_save_h = st.session_state.db_history[st.session_state.db_history['ลบ'] == False].copy()
-                to_save_h = save_data(to_save_h, HISTORY_FILE, key_col="doc_no")
+                # ✅ FIX: นำค่าไปเขียนทับ session_state เพื่อให้ลบจริงและไม่เด้งกลับมา
                 st.session_state.db_history = to_save_h
+                save_data(st.session_state.db_history, HISTORY_FILE, key_col="doc_no")
                 st.success("ลบเอกสารที่เลือกเรียบร้อย!")
                 st.rerun()
             st.markdown("</div>", unsafe_allow_html=True)
