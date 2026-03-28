@@ -8,7 +8,6 @@ import json
 # ==========================================
 # 1. ตั้งค่าการเชื่อมต่อ Supabase
 # ==========================================
-# ดึงค่า URL และ Key จาก Environment Variables (ใน Render) หรือจาก st.secrets (ในเครื่องตอนรัน local)
 SUPABASE_URL = os.environ.get("SUPABASE_URL") or st.secrets.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY") or st.secrets.get("SUPABASE_KEY")
 
@@ -17,22 +16,19 @@ if SUPABASE_URL and SUPABASE_KEY:
 else:
     st.error("⚠️ ไม่พบการตั้งค่า SUPABASE_URL หรือ SUPABASE_KEY ระบบอาจทำงานไม่สมบูรณ์")
 
-# เปลี่ยนชื่อตัวแปรไฟล์ให้ตรงกับชื่อตารางใน Supabase
 CUST_FILE = "customers"
 PROD_FILE = "products"
 HISTORY_FILE = "history_quotes"
 
 # ==========================================
-# 2. ฟังก์ชันโหลดข้อมูล (แทนที่การอ่าน CSV)
+# 2. ฟังก์ชันโหลดข้อมูล
 # ==========================================
 def load_data():
-    # --- 1. โหลดข้อมูลลูกค้า ---
     if "db_customers" not in st.session_state:
         try:
             response = supabase.table(CUST_FILE).select("*").order("id").execute()
             temp_df = pd.DataFrame(response.data)
             
-            # โครงสร้างคอลัมน์เริ่มต้นเพื่อป้องกัน Error
             required_cols = ["id", "ลบ", "รหัส", "ชื่อบริษัท", "ผู้ติดต่อ", "ที่อยู่", "โทร"]
             if temp_df.empty:
                 temp_df = pd.DataFrame(columns=required_cols)
@@ -47,7 +43,6 @@ def load_data():
             st.error(f"โหลดข้อมูลลูกค้าไม่สำเร็จ: {e}")
             st.session_state.db_customers = pd.DataFrame(columns=["ลบ", "รหัส", "ชื่อบริษัท", "ผู้ติดต่อ", "ที่อยู่", "โทร"])
 
-    # --- 2. โหลดข้อมูลสินค้า ---
     if "db_products" not in st.session_state:
         try:
             response = supabase.table(PROD_FILE).select("*").order("id").execute()
@@ -67,7 +62,6 @@ def load_data():
             st.error(f"โหลดข้อมูลสินค้าไม่สำเร็จ: {e}")
             st.session_state.db_products = pd.DataFrame(columns=["ลบ", "รหัสสินค้า", "รายการ", "ราคา", "หน่วย"])
 
-    # --- 3. โหลดประวัติเอกสาร ---
     if "db_history" not in st.session_state:
         try:
             response = supabase.table(HISTORY_FILE).select("*").order("id").execute()
@@ -81,7 +75,6 @@ def load_data():
                     if col not in temp_df.columns:
                         temp_df[col] = ""
                         
-            # คืนค่า data_json ให้เป็น String ตามที่ app.py เคยอ่านจาก CSV
             if not temp_df.empty and 'data_json' in temp_df.columns:
                 temp_df['data_json'] = temp_df['data_json'].apply(lambda x: json.dumps(x) if isinstance(x, dict) else x)
                 
@@ -92,32 +85,33 @@ def load_data():
             st.session_state.db_history = pd.DataFrame(columns=["ลบ", "date", "doc_no", "c_name", "total", "data_json"])
 
 # ==========================================
-# 3. ฟังก์ชันบันทึกข้อมูล (แทนที่การเขียน CSV)
+# 3. ฟังก์ชันบันทึกข้อมูล
 # ==========================================
 def save_data(df_to_save, table_name, key_col=None):
     df = df_to_save.copy()
     
-    # กันลืมคอลัมน์ ลบ
     if 'ลบ' not in df.columns:
         df['ลบ'] = False
 
-    # กรองเอาเฉพาะข้อมูลที่มีค่าใน key_col
     if key_col and key_col in df.columns:
         df = df[df[key_col].astype(str).str.strip() != ""]
 
     df = df.fillna("")
-    
-    # แปลง DataFrame ให้เป็นรูปแบบ List ของ Dictionary ที่เตรียมยิงเข้า Database
     records = df.to_dict(orient='records')
     
-    # เตรียมข้อมูลที่จะบันทึก
     clean_records = []
     for r in records:
-        # ถ้ายังไม่มี id หรือ id เป็นค่าว่าง ให้เอาออกเพื่อให้ Database สร้าง id รันให้อัตโนมัติ (Serial)
-        if 'id' in r and (pd.isna(r['id']) or r['id'] == ""):
-            del r['id']
+        # ✅ FIX: จัดการค่า id ป้องกัน Error 1.0 (invalid input syntax for type integer)
+        if 'id' in r:
+            if pd.isna(r['id']) or r['id'] == "":
+                del r['id']
+            else:
+                try:
+                    # บังคับแปลง 1.0 ให้กลายเป็น 1 ทันที
+                    r['id'] = int(float(r['id']))
+                except:
+                    del r['id']
             
-        # ถ้าตารางเป็นประวัติเอกสาร ต้องแปลง data_json กลับเป็น Dictionary เพื่อบันทึกเป็น JSONB ใน SQL
         if table_name == HISTORY_FILE and 'data_json' in r:
             if isinstance(r['data_json'], str):
                 try:
@@ -127,12 +121,10 @@ def save_data(df_to_save, table_name, key_col=None):
                     
         clean_records.append(r)
 
-    # อัปเดตหรือเพิ่มข้อมูลใหม่เข้าไปใน Supabase (Upsert)
     if len(clean_records) > 0:
         try:
             supabase.table(table_name).upsert(clean_records).execute()
             
-            # ดึงข้อมูลล่าสุดกลับมาเพื่ออัปเดต session_state และจัดเรียง id
             response = supabase.table(table_name).select("*").order("id").execute()
             latest_df = pd.DataFrame(response.data)
             
@@ -166,13 +158,11 @@ def generate_doc_no(prefix_type="QT"):
     hist_df = st.session_state.db_history.copy()
     hist_df['doc_no'] = hist_df['doc_no'].astype(str)
     
-    # กรองเฉพาะเอกสารของวันนี้
     today_docs = hist_df[hist_df['doc_no'].str.startswith(prefix, na=False)]
     
     if today_docs.empty:
         return f"{prefix}-001"
     else:
-        # หาเลขท้ายสุดของวันนี้
         def extract_run_no(doc_str):
             try:
                 return int(doc_str.split("-")[-1])
