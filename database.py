@@ -2,133 +2,153 @@ import pandas as pd
 import os
 import streamlit as st
 from datetime import datetime
+from supabase import create_client, Client
+import json
 
-# ชื่อไฟล์สำหรับเก็บข้อมูล
-CUST_FILE = "database_customers.csv"
-PROD_FILE = "database_products.csv"
-HISTORY_FILE = "history_quotes.csv"
+# ==========================================
+# 1. ตั้งค่าการเชื่อมต่อ Supabase
+# ==========================================
+# ดึงค่า URL และ Key จาก Environment Variables (ใน Render) หรือจาก st.secrets (ในเครื่องตอนรัน local)
+SUPABASE_URL = os.environ.get("SUPABASE_URL") or st.secrets.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY") or st.secrets.get("SUPABASE_KEY")
 
+if SUPABASE_URL and SUPABASE_KEY:
+    supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+else:
+    st.error("⚠️ ไม่พบการตั้งค่า SUPABASE_URL หรือ SUPABASE_KEY ระบบอาจทำงานไม่สมบูรณ์")
+
+# เปลี่ยนชื่อตัวแปรไฟล์ให้ตรงกับชื่อตารางใน Supabase
+CUST_FILE = "customers"
+PROD_FILE = "products"
+HISTORY_FILE = "history_quotes"
+
+# ==========================================
+# 2. ฟังก์ชันโหลดข้อมูล (แทนที่การอ่าน CSV)
+# ==========================================
 def load_data():
     # --- 1. โหลดข้อมูลลูกค้า ---
     if "db_customers" not in st.session_state:
-        if os.path.exists(CUST_FILE):
-            try:
-                temp_df = pd.read_csv(CUST_FILE, encoding='utf-8-sig')
-
-                # ✅ FIX: กัน index ค้าง
-                if 'Unnamed: 0' in temp_df.columns:
-                    temp_df = temp_df.drop(columns=['Unnamed: 0'])
-
-                # ✅ FIX: กัน column หาย
-                required_cols = ["ลบ", "รหัส", "ชื่อบริษัท", "ผู้ติดต่อ", "ที่อยู่", "โทร"]
+        try:
+            response = supabase.table(CUST_FILE).select("*").order("id").execute()
+            temp_df = pd.DataFrame(response.data)
+            
+            # โครงสร้างคอลัมน์เริ่มต้นเพื่อป้องกัน Error
+            required_cols = ["id", "ลบ", "รหัส", "ชื่อบริษัท", "ผู้ติดต่อ", "ที่อยู่", "โทร"]
+            if temp_df.empty:
+                temp_df = pd.DataFrame(columns=required_cols)
+            else:
                 for col in required_cols:
                     if col not in temp_df.columns:
                         temp_df[col] = ""
-
-                if 'ลบ' not in temp_df.columns:
-                    temp_df.insert(0, 'ลบ', False)
-
-                # ลบแฟกซ์
-                if 'แฟกซ์' in temp_df.columns:
-                    temp_df = temp_df.drop(columns=['แฟกซ์'])
-
-                temp_df = temp_df.fillna("")  # ✅ FIX
-
-                st.session_state.db_customers = temp_df
-
-            except:
-                st.session_state.db_customers = pd.DataFrame(columns=["ลบ", "รหัส", "ชื่อบริษัท", "ผู้ติดต่อ", "ที่อยู่", "โทร"])
-        else:
-            st.session_state.db_customers = pd.DataFrame([
-                {"ลบ": False, "รหัส": "C001", "ชื่อบริษัท": "ลูกค้าทั่วไป (เงินสด)", "ผู้ติดต่อ": "-", "ที่อยู่": "-", "โทร": "-"}
-            ])
-
-        st.session_state.db_customers['ลบ'] = st.session_state.db_customers['ลบ'].fillna(False).astype(bool)
+                        
+            temp_df = temp_df.fillna("")
+            st.session_state.db_customers = temp_df
+        except Exception as e:
+            st.error(f"โหลดข้อมูลลูกค้าไม่สำเร็จ: {e}")
+            st.session_state.db_customers = pd.DataFrame(columns=["ลบ", "รหัส", "ชื่อบริษัท", "ผู้ติดต่อ", "ที่อยู่", "โทร"])
 
     # --- 2. โหลดข้อมูลสินค้า ---
     if "db_products" not in st.session_state:
-        if os.path.exists(PROD_FILE):
-            try:
-                temp_df_p = pd.read_csv(PROD_FILE, encoding='utf-8-sig')
+        try:
+            response = supabase.table(PROD_FILE).select("*").order("id").execute()
+            temp_df = pd.DataFrame(response.data)
+            
+            required_cols = ["id", "ลบ", "รหัสสินค้า", "รายการ", "ราคา", "หน่วย"]
+            if temp_df.empty:
+                temp_df = pd.DataFrame(columns=required_cols)
+            else:
+                for col in required_cols:
+                    if col not in temp_df.columns:
+                        temp_df[col] = ""
+            
+            temp_df = temp_df.fillna("")
+            st.session_state.db_products = temp_df
+        except Exception as e:
+            st.error(f"โหลดข้อมูลสินค้าไม่สำเร็จ: {e}")
+            st.session_state.db_products = pd.DataFrame(columns=["ลบ", "รหัสสินค้า", "รายการ", "ราคา", "หน่วย"])
 
-                if 'Unnamed: 0' in temp_df_p.columns:
-                    temp_df_p = temp_df_p.drop(columns=['Unnamed: 0'])
-
-                # ✅ FIX: กัน column หาย
-                required_cols_p = ["ลบ", "รหัสสินค้า", "รายการ", "ราคา", "หน่วย"]
-                for col in required_cols_p:
-                    if col not in temp_df_p.columns:
-                        temp_df_p[col] = ""
-
-                if 'รหัสสินค้า' in temp_df_p.columns:
-                    temp_df_p['รหัสสินค้า'] = temp_df_p['รหัสสินค้า'].astype(str)
-
-                if 'ลบ' not in temp_df_p.columns:
-                    temp_df_p.insert(0, 'ลบ', False)
-
-                temp_df_p = temp_df_p.fillna("")  # ✅ FIX
-
-                st.session_state.db_products = temp_df_p
-
-            except:
-                st.session_state.db_products = pd.DataFrame(columns=["ลบ", "รหัสสินค้า", "รายการ", "ราคา", "หน่วย"])
-        else:
-            st.session_state.db_products = pd.DataFrame([
-                {"ลบ": False, "รหัสสินค้า": "P001", "รายการ": "สินค้าตัวอย่าง", "ราคา": 1000, "หน่วย": "ชิ้น"}
-            ])
-
-        st.session_state.db_products['ลบ'] = st.session_state.db_products['ลบ'].fillna(False).astype(bool)
-
-    # --- 3. โหลดประวัติ ---
+    # --- 3. โหลดประวัติเอกสาร ---
     if "db_history" not in st.session_state:
-        if os.path.exists(HISTORY_FILE):
-            try:
-                temp_hist = pd.read_csv(HISTORY_FILE, encoding='utf-8-sig')
+        try:
+            response = supabase.table(HISTORY_FILE).select("*").order("id").execute()
+            temp_df = pd.DataFrame(response.data)
+            
+            required_cols = ["id", "ลบ", "date", "doc_no", "c_name", "total", "data_json"]
+            if temp_df.empty:
+                temp_df = pd.DataFrame(columns=required_cols)
+            else:
+                for col in required_cols:
+                    if col not in temp_df.columns:
+                        temp_df[col] = ""
+                        
+            # คืนค่า data_json ให้เป็น String ตามที่ app.py เคยอ่านจาก CSV
+            if not temp_df.empty and 'data_json' in temp_df.columns:
+                temp_df['data_json'] = temp_df['data_json'].apply(lambda x: json.dumps(x) if isinstance(x, dict) else x)
+                
+            temp_df = temp_df.fillna("")
+            st.session_state.db_history = temp_df
+        except Exception as e:
+            st.error(f"โหลดข้อมูลประวัติเอกสารไม่สำเร็จ: {e}")
+            st.session_state.db_history = pd.DataFrame(columns=["ลบ", "date", "doc_no", "c_name", "total", "data_json"])
 
-                # ✅ FIX: กัน column หาย
-                required_hist_cols = ["ลบ", "timestamp", "doc_no", "customer", "total", "data_json"]
-                for col in required_hist_cols:
-                    if col not in temp_hist.columns:
-                        temp_hist[col] = ""
-
-                if 'Unnamed: 0' in temp_hist.columns:
-                    temp_hist = temp_hist.drop(columns=['Unnamed: 0'])
-
-                if 'ลบ' not in temp_hist.columns:
-                    temp_hist.insert(0, 'ลบ', False)
-
-                # ✅ FIX: กัน JSON พัง
-                temp_hist['data_json'] = temp_hist['data_json'].fillna("").astype(str)
-
-                temp_hist = temp_hist.fillna("")
-
-                st.session_state.db_history = temp_hist
-
-            except:
-                st.session_state.db_history = pd.DataFrame(columns=["ลบ", "timestamp", "doc_no", "customer", "total", "data_json"])
-        else:
-            st.session_state.db_history = pd.DataFrame(columns=["ลบ", "timestamp", "doc_no", "customer", "total", "data_json"])
-
-def save_data(df, filename, key_col=None):
-    df_to_save = df.copy()
+# ==========================================
+# 3. ฟังก์ชันบันทึกข้อมูล (แทนที่การเขียน CSV)
+# ==========================================
+def save_data(df_to_save, table_name, key_col=None):
+    df = df_to_save.copy()
     
-    if 'ลบ' in df_to_save.columns:
-        df_to_save = df_to_save[df_to_save['ลบ'] == False]
-        df_to_save['ลบ'] = False
+    # กันลืมคอลัมน์ ลบ
+    if 'ลบ' not in df.columns:
+        df['ลบ'] = False
 
-    if key_col and key_col in df_to_save.columns:
-        df_to_save = df_to_save[df_to_save[key_col].astype(str).str.strip() != ""]
+    # กรองเอาเฉพาะข้อมูลที่มีค่าใน key_col
+    if key_col and key_col in df.columns:
+        df = df[df[key_col].astype(str).str.strip() != ""]
 
-    if 'Unnamed: 0' in df_to_save.columns:
-        df_to_save = df_to_save.drop(columns=['Unnamed: 0'])
+    df = df.fillna("")
+    
+    # แปลง DataFrame ให้เป็นรูปแบบ List ของ Dictionary ที่เตรียมยิงเข้า Database
+    records = df.to_dict(orient='records')
+    
+    # เตรียมข้อมูลที่จะบันทึก
+    clean_records = []
+    for r in records:
+        # ถ้ายังไม่มี id หรือ id เป็นค่าว่าง ให้เอาออกเพื่อให้ Database สร้าง id รันให้อัตโนมัติ (Serial)
+        if 'id' in r and (pd.isna(r['id']) or r['id'] == ""):
+            del r['id']
+            
+        # ถ้าตารางเป็นประวัติเอกสาร ต้องแปลง data_json กลับเป็น Dictionary เพื่อบันทึกเป็น JSONB ใน SQL
+        if table_name == HISTORY_FILE and 'data_json' in r:
+            if isinstance(r['data_json'], str):
+                try:
+                    r['data_json'] = json.loads(r['data_json'])
+                except:
+                    pass
+                    
+        clean_records.append(r)
 
-    df_to_save = df_to_save.fillna("")  # ✅ FIX
+    # อัปเดตหรือเพิ่มข้อมูลใหม่เข้าไปใน Supabase (Upsert)
+    if len(clean_records) > 0:
+        try:
+            supabase.table(table_name).upsert(clean_records).execute()
+            
+            # ดึงข้อมูลล่าสุดกลับมาเพื่ออัปเดต session_state และจัดเรียง id
+            response = supabase.table(table_name).select("*").order("id").execute()
+            latest_df = pd.DataFrame(response.data)
+            
+            if table_name == HISTORY_FILE and 'data_json' in latest_df.columns:
+                 latest_df['data_json'] = latest_df['data_json'].apply(lambda x: json.dumps(x) if isinstance(x, dict) else x)
+                 
+            latest_df = latest_df.fillna("")
+            return latest_df
+        except Exception as e:
+            st.error(f"เกิดข้อผิดพลาดในการบันทึกข้อมูลตาราง {table_name}: {e}")
+            return df
+    return df
 
-    df_to_save = df_to_save.reset_index(drop=True)
-
-    df_to_save.to_csv(filename, index=False, encoding='utf-8-sig')
-    return df_to_save
-
+# ==========================================
+# 4. ฟังก์ชันช่วยเหลืออื่นๆ
+# ==========================================
 def to_int(val):
     try:
         if isinstance(val, str): val = val.replace(',', '')
@@ -146,20 +166,20 @@ def generate_doc_no(prefix_type="QT"):
     hist_df = st.session_state.db_history.copy()
     hist_df['doc_no'] = hist_df['doc_no'].astype(str)
     
-    matched_docs = hist_df[hist_df['doc_no'].str.startswith(prefix, na=False)]
+    # กรองเฉพาะเอกสารของวันนี้
+    today_docs = hist_df[hist_df['doc_no'].str.startswith(prefix, na=False)]
     
-    if matched_docs.empty:
+    if today_docs.empty:
         return f"{prefix}-001"
-    
-    max_run = 0
-    for doc in matched_docs['doc_no']:
-        try:
-            parts = doc.split('-')
-            if len(parts) >= 3:
-                run_num = int(parts[-1])
-                if run_num > max_run:
-                    max_run = run_num
-        except:
-            pass
-            
-    return f"{prefix}-{max_run + 1:03d}"
+    else:
+        # หาเลขท้ายสุดของวันนี้
+        def extract_run_no(doc_str):
+            try:
+                return int(doc_str.split("-")[-1])
+            except:
+                return 0
+                
+        today_docs['run_no'] = today_docs['doc_no'].apply(extract_run_no)
+        max_run = today_docs['run_no'].max()
+        next_run = max_run + 1
+        return f"{prefix}-{next_run:03d}"
