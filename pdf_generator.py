@@ -274,7 +274,7 @@ def convert_pdf_to_image(pdf_bytes, format_type):
         new_im.save(img_byte_arr, format=pil_format)
         return img_byte_arr.getvalue(), None
     except Exception as e:
-        return None, str(e)import os
+        return None, str(e)
 import io
 import tempfile
 import math
