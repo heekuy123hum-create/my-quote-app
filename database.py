@@ -1,7 +1,7 @@
 import pandas as pd
 import os
 import streamlit as st
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from supabase import create_client, Client
 import json
 
@@ -19,6 +19,13 @@ else:
 CUST_FILE = "customers"
 PROD_FILE = "products"
 HISTORY_FILE = "history_quotes"
+
+# ==========================================
+# ⭐ ฟังก์ชันดึงเวลาประเทศไทย (GMT+7) แก้ปัญหาเวลา Render เพี้ยน
+# ==========================================
+def get_thai_time():
+    tz_th = timezone(timedelta(hours=7))
+    return datetime.now(tz_th)
 
 # ==========================================
 # 2. ฟังก์ชันโหลดข้อมูล
@@ -96,6 +103,22 @@ def save_data(df_to_save, table_name, key_col=None):
     if key_col and key_col in df.columns:
         df = df[df[key_col].astype(str).str.strip() != ""]
 
+    # =========================================================
+    # ⭐ ระบบกันประวัติซ้ำ (อัปเดตเวอร์ชันล่าสุดทับลงเลขเอกสารเดิม)
+    # =========================================================
+    if table_name == HISTORY_FILE and 'doc_no' in df.columns:
+        # 1. ถ้าส่งข้อมูลซ้ำมาในรอบเดียว ให้ตัดทิ้งเก็บแค่อันสุดท้าย (ล่าสุด)
+        df = df.drop_duplicates(subset=['doc_no'], keep='last')
+        
+        # 2. ไปเช็กในฐานข้อมูลว่ามี doc_no นี้อยู่แล้วไหม ถ้ามีให้จำ id เดิมไว้
+        try:
+            existing_db = supabase.table(HISTORY_FILE).select("id, doc_no").execute()
+            doc_map = {str(row['doc_no']).strip(): row['id'] for row in existing_db.data if 'doc_no' in row and 'id' in row}
+        except:
+            doc_map = {}
+    else:
+        doc_map = {}
+
     df = df.fillna("")
     records = df.to_dict(orient='records')
     
@@ -103,15 +126,29 @@ def save_data(df_to_save, table_name, key_col=None):
     new_records = []
     
     for r in records:
-        # คืนค่า JSON สำหรับตารางประวัติเอกสาร
-        if table_name == HISTORY_FILE and 'data_json' in r:
-            if isinstance(r['data_json'], str):
-                try:
-                    r['data_json'] = json.loads(r['data_json'])
-                except:
-                    pass
+        # =========================================================
+        # จัดการข้อมูลสำหรับตารางประวัติเอกสารโดยเฉพาะ
+        # =========================================================
+        if table_name == HISTORY_FILE:
+            # 1. อัปเดตเวลาตอนเซฟให้เป็น "เวลาประเทศไทยล่าสุดเสมอ" 
+            r['date'] = get_thai_time().strftime('%Y-%m-%d %H:%M:%S')
+
+            # 2. คืนค่า JSON สำหรับโครงสร้างใบเสนอราคา
+            if 'data_json' in r:
+                if isinstance(r['data_json'], str):
+                    try:
+                        r['data_json'] = json.loads(r['data_json'])
+                    except:
+                        pass
+                        
+            # 3. ⭐️ ถ้า doc_no ของเอกสารใบนี้ มีในฐานข้อมูลอยู่แล้ว ให้ใช้ 'id' เดิม 
+            # (เพื่อให้ฐานข้อมูลรู้ว่าต้อง อัปเดตทับ ไม่ใช่ สร้างใหม่)
+            if 'doc_no' in r and str(r['doc_no']).strip() in doc_map:
+                r['id'] = doc_map[str(r['doc_no']).strip()]
                     
-        # ตรวจสอบว่ามี id หรือไม่ เพื่อแยกกลุ่มข้อมูลเก่า/ใหม่
+        # =========================================================
+        # แยกกลุ่มข้อมูลเพื่อทำ Insert (ของใหม่) และ Upsert (ของเดิม)
+        # =========================================================
         has_valid_id = False
         if 'id' in r:
             if pd.isna(r['id']) or r['id'] == "":
@@ -129,15 +166,15 @@ def save_data(df_to_save, table_name, key_col=None):
             new_records.append(r)
 
     try:
-        # 1. อัปเดตข้อมูลที่มีอยู่แล้ว (Upsert)
+        # บันทึกข้อมูลแบบอัปเดตทับของเดิม (สำหรับอันที่มี id แล้ว)
         if len(existing_records) > 0:
             supabase.table(table_name).upsert(existing_records).execute()
             
-        # 2. เพิ่มข้อมูลใหม่ (Insert) โดยไม่ส่งคีย์ id ไปด้วย
+        # บันทึกข้อมูลแถวใหม่ (สำหรับอันที่เพิ่งสร้าง)
         if len(new_records) > 0:
             supabase.table(table_name).insert(new_records).execute()
             
-        # ดึงข้อมูลล่าสุดกลับมาจัดเรียงใหม่
+        # ดึงข้อมูลกลับมาแสดงผล
         response = supabase.table(table_name).select("*").order("id").execute()
         latest_df = pd.DataFrame(response.data)
         
@@ -162,7 +199,8 @@ def to_int(val):
         return 0
 
 def generate_doc_no(prefix_type="QT"):
-    today_str = datetime.now().strftime('%Y%m%d')
+    # ⭐️ สร้างเลขเอกสาร โดยอิงตามวันที่ของประเทศไทย
+    today_str = get_thai_time().strftime('%Y%m%d')
     prefix = f"{prefix_type}-{today_str}"
     
     if st.session_state.db_history.empty:
